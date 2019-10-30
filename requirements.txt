@@ -1,2 +1,4 @@
 flask_cors
 flask
+pandas
+scikit-learn
