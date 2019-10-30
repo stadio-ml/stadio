@@ -5,7 +5,7 @@ import pandas as pd
 import traceback
 
 ALLOWED_EXTENSIONS = ('.csv')
-HEADER = {"Id", "Predicted"}
+HEADER = ["Id", "Predicted"]
 
 def randomString(stringLength=8):
     """Generate a random string of fixed length """
@@ -23,11 +23,13 @@ def check_file(file, test_file):
         raise Exception(f"Test solution error - File: {test_file} - {ex}")
 
     submitted_df = pd.read_csv(file.stream)
+    submitted_columns = list(submitted_df.columns)
     # check file schema
-    if not any(h in submitted_df.columns for h in HEADER):
-        raise Exception(f"Missing columns {HEADER.difference(set(submitted_df.columns))} in submitted solution.")
+    if not (all([h in submitted_columns for h in HEADER]) == True):
+        missing_cols = [h for h in HEADER if h not in submitted_columns]
+        raise Exception(f"Missing columns {missing_cols} in the submitted solution with columns {submitted_columns}.")
 
-    if len(submitted_df.columns) > 2:
+    if len(submitted_columns) > 2:
         raise Exception(f"Too many columns - Expecting columns {HEADER} in submitted solution.")
 
     # check file len

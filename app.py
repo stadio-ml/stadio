@@ -48,6 +48,7 @@ def evaluate():
                 (session["submit_request_id"] != request.args.get('submitRequestId', None)):
             error_message = "Wrong request. Use the form web page to upload a solution or try to reload the page!"
             raise Exception(error_message)
+
         submitted_to_evaluate = request.args["submitted_to_evaluate"]
 
         # TODO run evaluation here
@@ -63,7 +64,7 @@ def evaluate():
 ################
 # Upload
 ################
-@app.route('/upload', methods=["GET", "POST"])
+@app.route('/upload', methods=["POST"])
 def upload():
     error_message = ""
     # Check submit request id
