@@ -56,13 +56,11 @@ def evaluate():
     try:
         api_key = request.args.get("api_key")
         submission_id = request.args.get("submission_id")
-        print(api_key, submission_id)
         if not api_auth.is_valid(api_key):
             # TODO build dictionary of possible errors & avoid hardcoding strings
             raise Exception("Invalid API key!")
 
         user_id = api_auth.get_user(api_key)
-        print(user_id)
         submission = Submission.query.filter_by(id=submission_id, user_id=user_id).first()
         public_score, private_score = eval_public_private(submission.filename, TEST_FILE_PATH)
         if not submission:
@@ -87,7 +85,6 @@ def evaluate():
 def upload():
     error_message = ""
     # Check submit request id
-    print(request.files)
 
     try:
         if ("submit_request_id" not in session.keys()) or \
