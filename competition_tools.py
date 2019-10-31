@@ -3,8 +3,9 @@ import random
 import string
 import pandas as pd
 import traceback
+import os
 
-ALLOWED_EXTENSIONS = ('.csv')
+ALLOWED_EXTENSIONS = {'.csv'}
 HEADER = ["Id", "Predicted"]
 
 def randomString(stringLength=8):
@@ -17,7 +18,6 @@ def check_file(file, test_file):
     check = True
 
     try:
-
         test_df = pd.read_csv(test_file)
     except Exception as ex:
         raise Exception(f"Test solution error - File: {test_file} - {ex}")
@@ -29,7 +29,7 @@ def check_file(file, test_file):
         missing_cols = [h for h in HEADER if h not in submitted_columns]
         raise Exception(f"Missing columns {missing_cols} in the submitted solution with columns {submitted_columns}.")
 
-    if len(submitted_columns) > 2:
+    if len(submitted_columns) > len(HEADER):
         raise Exception(f"Too many columns - Expecting columns {HEADER} in submitted solution.")
 
     # check file len
@@ -42,7 +42,7 @@ def check_file(file, test_file):
 
 
 def allowed_file(filename):
-    return filename.lower().endswith(ALLOWED_EXTENSIONS)
+    return os.path.splitext(filename.lower())[1] in ALLOWED_EXTENSIONS
 
 
 def get_timestamp():
