@@ -3,8 +3,9 @@ import random
 import string
 import pandas as pd
 import traceback
+import os
 
-ALLOWED_EXTENSIONS = ('.csv')
+ALLOWED_EXTENSIONS = {'.csv'}
 HEADER = ["Id", "Predicted"]
 
 def randomString(stringLength=8):
@@ -41,7 +42,7 @@ def check_file(file, test_file):
 
 
 def allowed_file(filename):
-    return filename.lower().endswith(ALLOWED_EXTENSIONS)
+    return os.path.splitext(filename.lower())[1] in ALLOWED_EXTENSIONS
 
 
 def get_timestamp():
