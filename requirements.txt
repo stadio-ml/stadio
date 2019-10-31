@@ -2,3 +2,4 @@ flask_cors
 flask
 pandas
 scikit-learn
+flask_sqlalchemy
