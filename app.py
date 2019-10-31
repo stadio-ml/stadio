@@ -7,11 +7,13 @@ from werkzeug.utils import secure_filename
 import competition_tools
 import os
 import secrets
+from api_utils import ApiAuth
 
 #TODO Load configuration from config.yaml
 UPLOAD_FOLDER = './uploads'
 TEST_FILE_PATH = './static/test_solution/test_solution.csv'
 MAX_FILE_SIZE = 32 * 1024 * 1024  # limit upload file size to 32MB
+API_FILE = 'mappings.dummy.json'
 
 
 app = Flask(__name__, static_url_path="", static_folder="static")
@@ -21,6 +23,7 @@ app.secret_key = os.urandom(24)
 
 CORS(app)
 
+api_auth = ApiAuth(API_FILE)
 
 ################
 # Error Handling
@@ -79,6 +82,8 @@ def upload():
 
         #TODO check API_KEY from request.form.get("APIKey", None)
         api_key = request.form.get("APIKey", None)
+        if not api_auth.is_valid(api_key):
+            raise Exception("Invalid API key!")
 
         # Save submitted solution
         if request.method == 'POST':
