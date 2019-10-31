@@ -1,18 +1,9 @@
 import datetime
-import random
-import string
 import pandas as pd
-import traceback
 import os
 
 ALLOWED_EXTENSIONS = {'.csv'}
 HEADER = ["Id", "Predicted"]
-
-def randomString(stringLength=8):
-    """Generate a random string of fixed length """
-    letters= string.ascii_lowercase
-    return ''.join(random.sample(letters, stringLength))
-
 
 def check_file(file, test_file):
     check = True

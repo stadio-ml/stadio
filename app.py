@@ -6,6 +6,7 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import competition_tools
 import os
+import secrets
 from api_utils import ApiAuth
 
 #TODO Load configuration from config.yaml
@@ -124,7 +125,7 @@ def upload():
 ################
 @app.route('/submit', methods=["GET"])
 def submit():
-    submit_request_id = competition_tools.randomString(24)
+    submit_request_id = secrets.token_hex()
     session["submit_request_id"] = submit_request_id
     return render_template("submit.html", submit_request_id=submit_request_id)
 
