@@ -1,18 +1,21 @@
 import traceback
 
-from flask import Flask, send_file, session, jsonify, redirect, flash, url_for
+from flask import Flask, send_file, session, jsonify, redirect, flash, url_for, request
 from flask import render_template, request
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import competition_tools
 import os
 from api_utils import ApiAuth
+from models import db, Submission, Evaluation
+from competition_tools import eval_public_private
 
 #TODO Load configuration from config.yaml
 UPLOAD_FOLDER = './uploads'
 TEST_FILE_PATH = './static/test_solution/test_solution.csv'
 MAX_FILE_SIZE = 32 * 1024 * 1024  # limit upload file size to 32MB
 API_FILE = 'mappings.dummy.json'
+DB_FILE = 'sqlite:///test.db'
 
 
 app = Flask(__name__, static_url_path="", static_folder="static")
@@ -23,6 +26,10 @@ app.secret_key = os.urandom(24)
 CORS(app)
 
 api_auth = ApiAuth(API_FILE)
+app.config["SQLALCHEMY_DATABASE_URI"] = DB_FILE
+db.init_app(app)
+db.app = app
+db.create_all()
 
 ################
 # Error Handling
@@ -47,21 +54,30 @@ def error():
 @app.route('/evaluate', methods=["GET"])
 def evaluate():
     try:
-        if ("submit_request_id" not in session.keys()) or \
-                (session["submit_request_id"] != request.args.get('submitRequestId', None)):
-            error_message = "Wrong request. Use the form web page to upload a solution or try to reload the page!"
-            raise Exception(error_message)
+        api_key = request.args.get("api_key")
+        submission_id = request.args.get("submission_id")
+        print(api_key, submission_id)
+        if not api_auth.is_valid(api_key):
+            # TODO build dictionary of possible errors & avoid hardcoding strings
+            raise Exception("Invalid API key!")
 
-        submitted_to_evaluate = request.args["submitted_to_evaluate"]
-
-        # TODO run evaluation here
+        user_id = api_auth.get_user(api_key)
+        print(user_id)
+        submission = Submission.query.filter_by(id=submission_id, user_id=user_id).first()
+        public_score, private_score = eval_public_private(submission.filename, TEST_FILE_PATH)
+        if not submission:
+            # not found!
+            raise Exception("Submission not found!")
 
     except Exception as ex:
         traceback.print_stack()
         traceback.print_exc()
         return redirect(url_for('error', error_message=ex))
 
-    return jsonify(submitted_to_evaluate)
+    evaluation = Evaluation(submission=submission, evaluation_public=public_score, evaluation_private=private_score)
+    db.session.add(evaluation)
+    db.session.commit()
+    return jsonify({ "score": public_score })
 
 
 ################
@@ -83,6 +99,7 @@ def upload():
         api_key = request.form.get("APIKey", None)
         if not api_auth.is_valid(api_key):
             raise Exception("Invalid API key!")
+        user_id = api_auth.get_user(api_key) # This will be stored in the Submissions table
 
         # Save submitted solution
         if request.method == 'POST':
@@ -107,11 +124,17 @@ def upload():
 
             elif file:
                 timestamp = competition_tools.get_timestamp()
-                new_file_name = f"{timestamp}_{api_key}.csv"
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], new_file_name))
-                return redirect(url_for('evaluate',
-                                        submitted_to_evaluate=new_file_name,
-                                        submitRequestId=session["submit_request_id"]))
+                new_file_name = f"{timestamp}_{user_id}.csv"
+                output_file = os.path.join(app.config['UPLOAD_FOLDER'], new_file_name)
+                # we are reading the stream when checking the file, so we need to go back to the start
+                file.stream.seek(0)
+                file.save(output_file)
+                submission = Submission(user_id=user_id, filename=output_file)
+                db.session.add(submission)
+                db.session.commit()
+                # By passing api_key, we can later check that the user calling /evaluate
+                # is the same that has made the submission
+                return redirect(url_for('evaluate', submission_id=submission.id, api_key=api_key))
             else:
                 raise Exception("You should not be here!")
     except Exception as ex:
