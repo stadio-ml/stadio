@@ -10,6 +10,7 @@ import secrets
 from api_utils import ApiAuth
 from models import db, Submission, Evaluation
 from competition_tools import eval_public_private
+from sqlalchemy import func
 
 #TODO Load configuration from config.yaml
 UPLOAD_FOLDER = './uploads'
@@ -17,6 +18,10 @@ TEST_FILE_PATH = './static/test_solution/test_solution.csv'
 MAX_FILE_SIZE = 32 * 1024 * 1024  # limit upload file size to 32MB
 API_FILE = 'mappings.dummy.json'
 DB_FILE = 'sqlite:///test.db'
+
+# function that maps db-stored score to printable value
+# TODO: move somewhere appropriate
+score_mapper = lambda score: f"{score*100:.2f}"
 
 
 app = Flask(__name__, static_url_path="", static_folder="static")
@@ -48,6 +53,19 @@ def error():
     error_message = request.args["error_message"]
     return render_template('error.html', error_message = str(error_message))
 
+@app.route('/', methods=["GET"])
+def leaderboard():
+    # TODO: here, we assume that a higher score is preferable.
+    # it might not always be like this (e.g. MSE)
+    # For those cases, func.min should be used: make this parameter
+    # configurable from config file
+    participants = db.session \
+        .query(Submission.user_id, func.max(Evaluation.evaluation_public)) \
+        .join(Submission) \
+        .group_by(Submission.user_id) \
+        .order_by(Evaluation.evaluation_public.desc()) \
+        .all()
+    return render_template("leaderboard.html", participants=[ (user_id, score_mapper(score)) for user_id, score in participants ])
 
 ################
 # Evaluate
