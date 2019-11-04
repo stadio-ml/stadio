@@ -2,60 +2,51 @@
 
 {% block body %}
 
-    <div class="card mt-5">
-        <div class="card-body">
-            <form class="was-validated" action="/upload" method="POST" enctype="multipart/form-data">
-                <div class="text-center mb-4">
-                    <img class="mb-4"
-                         src="https://getbootstrap.com/docs/4.0/assets/brand/bootstrap-solid.svg"
-                         alt=""
-                         width="72" height="72">
-                    <h1 class="h3 mb-3 font-weight-normal">Floating labels</h1>
-                    <p>Build form controls with floating labels via the <code>:placeholder-shown</code>
-                        pseudo-element.
-                        <a href="https://caniuse.com/#feat=css-placeholder-shown">Works in latest Chrome,
-                            Safari,
-                            and
-                            Firefox.</a></p>
-                </div>
+    <form class="was-validated" action="/upload" method="POST" enctype="multipart/form-data">
+        <div class="text-center mb-4">
+            {#                    <img class="mb-4"#}
+            {#                         src="https://getbootstrap.com/docs/4.0/assets/brand/bootstrap-solid.svg"#}
+            {#                         alt=""#}
+            {#                         width="72" height="72">#}
+            <h1 class="">Data Science Lab</h1>
+            <h1 class="h3 mb-3 font-weight-normal">Submission system</h1>
 
-                <div class="form-label-group mb-3">
-                    <label for="APIKey">API key</label>
-                    <input type="password"
-                           id="APIKeyInput"
-                           name="APIKey"
-                           class="form-control"
-                           placeholder="A123456789"
-                           value=""
-                           required>
-                </div>
+            <p> Instructions here...</p>
+            <P>
+                <a href="/" class="btn btn-primary">Go to leaderboard</a>
 
-                <div class="form-label-group  mb-4">
-                    <label for="submittedSolution">Solution file</label>
-                    <input type="file"
-                           class="form-control-file"
-                           id="submittedSolutionFileInput"
-                           name="submittedSolutionFile"
-                           required>
-                </div>
-
-                <input type="hidden"
-                       id="submitRequestIdInput"
-                       name="submitRequestId"
-                       value="{{ submit_request_id }}"
-                       required>
-
-                <div class="form-label-group">
-                    <button class="btn btn-lg btn-primary btn-block" type="submit">Submit</button>
-                </div>
-            </form>
+            </p>
         </div>
-        <div class="card-footer">
-            <p class="text-muted text-center">© 2019-2020</p>
 
+        <div class="form-label-group mb-3">
+            <label for="APIKey">API key</label>
+            <input type="password"
+                   id="APIKeyInput"
+                   name="APIKey"
+                   class="form-control"
+                   placeholder="A123456789"
+                   value=""
+                   required>
         </div>
-    </div>
 
+        <div class="form-label-group  mb-4">
+            <label for="submittedSolution">Solution file</label>
+            <input type="file"
+                   class="form-control-file"
+                   id="submittedSolutionFileInput"
+                   name="submittedSolutionFile"
+                   required>
+        </div>
 
+        <input type="hidden"
+               id="submitRequestIdInput"
+               name="submitRequestId"
+               value="{{ submit_request_id }}"
+               required>
+
+        <div class="form-label-group">
+            <button class="btn btn-lg btn-primary btn-block" type="submit">Submit</button>
+        </div>
+    </form>
 
 {% endblock %}
