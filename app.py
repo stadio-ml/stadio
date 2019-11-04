@@ -67,7 +67,15 @@ def leaderboard():
         .group_by(Submission.user_id) \
         .order_by(Evaluation.evaluation_public.desc()) \
         .all()
-    return render_template("leaderboard.html", participants=[ (user_id, score_mapper(score)) for user_id, score in participants ])
+    score = request.args.get("score")
+    highlight_user_id = request.args.get("highlight")
+    participants = [ (user_id, score_mapper(score)) for user_id, score in participants ]
+    if score:
+        try:
+            score = score_mapper(float(score))
+        except: # Just in case someone passes something nasty for `score`
+            score = None
+    return render_template("leaderboard.html", score=score, highlight_user_id=highlight_user_id, participants=participants)
 
 ################
 # Evaluate
@@ -96,7 +104,8 @@ def evaluate():
     evaluation = Evaluation(submission=submission, evaluation_public=public_score, evaluation_private=private_score)
     db.session.add(evaluation)
     db.session.commit()
-    return jsonify({ "score": public_score })
+    # return jsonify({ "score": public_score })
+    return redirect(url_for('leaderboard', score=public_score, highlight=user_id))
 
 
 ################
