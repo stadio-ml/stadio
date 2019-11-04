@@ -3,3 +3,5 @@ flask
 pandas
 scikit-learn
 flask_sqlalchemy
+cherrypy
+paste
