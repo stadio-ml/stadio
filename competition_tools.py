@@ -1,6 +1,7 @@
 import datetime
 import pandas as pd
 import os
+from evaluation_functions import evaluator
 
 ALLOWED_EXTENSIONS = {'.csv'}
 HEADER = ["Id", "Predicted"]
@@ -46,10 +47,6 @@ def eval_public_private(submission, solution):
         # We shuld never fail here -- the file has already been validated!
         raise Exception("Unexpected error! Please contact an administrator")
 
-    # TODO implement custom function
-    def my_accuracy(y_true, y_pred):
-        return sum(1 for a,b in zip(y_true, y_pred) if a==b)/len(y_true)
-
     public_mask = df_true[PUBLIC] == 1
     y_pred_public = df_pred[public_mask][TARGET].values
     y_true_public = df_true[public_mask][TARGET].values
@@ -57,8 +54,8 @@ def eval_public_private(submission, solution):
     y_pred_private = df_pred[~public_mask][TARGET].values
     y_true_private = df_true[~public_mask][TARGET].values
     
-    public_score = my_accuracy(y_true_public, y_pred_public)
-    private_score = my_accuracy(y_true_private, y_pred_private)
+    public_score = evaluator(y_true_public, y_pred_public)
+    private_score = evaluator(y_true_private, y_pred_private)
     
     return public_score, private_score
 

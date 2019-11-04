@@ -1,0 +1,42 @@
+{% extends 'layout.html' %}
+
+{% block body %}
+    <div class="text-center mb-4">
+        <h1 class="">Data Science Lab</h1>
+        <h1 class="h3 mb-3 font-weight-normal">Leaderboard</h1>
+        <a href="/submit" class="btn btn-primary">New submission</a>
+    </div>
+    <table class="table table-striped">
+        <thead>
+        <tr>
+            <th scope="col">#</th>
+            <th scope="col">User Id</th>
+            <th scope="col">Score</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for user_id, score in participants %}
+
+            {% if user_id == "baseline" %}
+                <tr class="table-secondary">
+                    <th scope="row">{{ loop.index }}</th>
+                    <td>{{ user_id }}</td>
+                    <td>{{ score }}</td>
+                </tr>
+
+            {% endif %}
+
+            <tr>
+                <th scope="row">{{ loop.index }}</th>
+                <td>{{ user_id }}</td>
+                <td>{{ score }}</td>
+            </tr>
+
+
+        {% endfor %}
+
+
+        </tbody>
+    </table>
+
+{% endblock %}
