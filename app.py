@@ -104,7 +104,6 @@ def evaluate():
     evaluation = Evaluation(submission=submission, evaluation_public=public_score, evaluation_private=private_score)
     db.session.add(evaluation)
     db.session.commit()
-    # return jsonify({ "score": public_score })
     return redirect(url_for('leaderboard', score=public_score, highlight=user_id))
 
 
