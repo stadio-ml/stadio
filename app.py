@@ -11,6 +11,7 @@ from api_utils import ApiAuth
 from models import db, Submission, Evaluation
 from competition_tools import eval_public_private
 from sqlalchemy import func
+from datetime import datetime
 
 #TODO Load configuration from config.yaml
 UPLOAD_FOLDER = './uploads'
@@ -18,6 +19,7 @@ TEST_FILE_PATH = './static/test_solution/test_solution.csv'
 MAX_FILE_SIZE = 32 * 1024 * 1024  # limit upload file size to 32MB
 API_FILE = 'mappings.dummy.json'
 DB_FILE = 'sqlite:///test.db'
+TIME_BETWEEN_SUBMISSIONS = 5 * 60 # 5 minutes between submissions
 
 # function that maps db-stored score to printable value
 # TODO: move somewhere appropriate
@@ -119,6 +121,12 @@ def upload():
 
         # Save submitted solution
         if request.method == 'POST':
+            latest_submission = db.session.query(func.max(Submission.timestamp)).filter(Submission.user_id == user_id).first()[0]
+            now = datetime.utcnow()
+            if latest_submission and (now - latest_submission).total_seconds() < TIME_BETWEEN_SUBMISSIONS:
+                delta = max(5, int(TIME_BETWEEN_SUBMISSIONS - (now - latest_submission).total_seconds())) # avoid messages such as "try again in 0/1/2 seconds" (TODO remove magic number 5)
+                raise Exception(f"You are exceeding the {TIME_BETWEEN_SUBMISSIONS} seconds limit between submissions. Please try again in {delta} seconds")
+            
             # check if the post request has the file part
             if 'submittedSolutionFile' not in request.files:
                 error_message ='No file part'
