@@ -5,6 +5,11 @@
         <h1 class="">Data Science Lab</h1>
         <h1 class="h3 mb-3 font-weight-normal">Leaderboard</h1>
         <a href="/submit" class="btn btn-primary">New submission</a>
+        {% if score %}
+            <div class="alert alert-success mt-3" role="alert">
+                The score for you current submission is: {{ score }}
+            </div>
+        {% endif %}
     </div>
     <table class="table table-striped">
         <thead>
@@ -19,18 +24,15 @@
 
             {% if user_id == "baseline" %}
                 <tr class="table-secondary">
+            {% elif user_id == highlight_user_id %}
+                <tr class="table-primary">
+            {% else %}
+                <tr>
+            {% endif %}
                     <th scope="row">{{ loop.index }}</th>
                     <td>{{ user_id }}</td>
                     <td>{{ score }}</td>
                 </tr>
-
-            {% endif %}
-
-            <tr>
-                <th scope="row">{{ loop.index }}</th>
-                <td>{{ user_id }}</td>
-                <td>{{ score }}</td>
-            </tr>
 
 
         {% endfor %}
