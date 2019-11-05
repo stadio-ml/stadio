@@ -13,7 +13,7 @@ from competition_tools import eval_public_private
 from sqlalchemy import func
 from datetime import datetime
 
-#TODO Load configuration from config.yaml
+# TODO Load configuration from config.yaml
 UPLOAD_FOLDER = './uploads'
 TEST_FILE_PATH = './static/test_solution/test_solution.csv'
 MAX_FILE_SIZE = 32 * 1024 * 1024  # limit upload file size to 32MB
@@ -23,8 +23,7 @@ TIME_BETWEEN_SUBMISSIONS = 5 * 60 # 5 minutes between submissions
 
 # function that maps db-stored score to printable value
 # TODO: move somewhere appropriate
-score_mapper = lambda score: f"{score*100:.2f}"
-
+score_mapper = lambda score: f"{score * 100:.2f}"
 
 app = Flask(__name__, static_url_path="", static_folder="static")
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -39,21 +38,25 @@ db.init_app(app)
 db.app = app
 db.create_all()
 
+
 ################
 # Error Handling
 ################
 @app.errorhandler(413)
 def request_entity_too_large(error):
-    return render_template('error.html', error_message = str(error)), 413
+    return render_template('error.html', error_message=str(error)), 413
+
 
 @app.errorhandler(404)
 def request_entity_too_large(error):
-    return render_template('error.html', error_message = str(error)), 404
+    return render_template('error.html', error_message=str(error)), 404
+
 
 @app.route('/error', methods=["GET"])
 def error():
     error_message = request.args["error_message"]
-    return render_template('error.html', error_message = str(error_message))
+    return render_template('error.html', error_message=str(error_message))
+
 
 @app.route('/', methods=["GET"])
 def leaderboard():
@@ -121,11 +124,10 @@ def upload():
             error_message = "Wrong request. Use the form web page to upload a solution or try to reload the page!"
             raise Exception(error_message)
 
-        #TODO check API_KEY from request.form.get("APIKey", None)
         api_key = request.form.get("APIKey", None)
         if not api_auth.is_valid(api_key):
             raise Exception("Invalid API key!")
-        user_id = api_auth.get_user(api_key) # This will be stored in the Submissions table
+        user_id = api_auth.get_user(api_key)  # This will be stored in the Submissions table
 
         # Save submitted solution
         if request.method == 'POST':
@@ -137,24 +139,23 @@ def upload():
             
             # check if the post request has the file part
             if 'submittedSolutionFile' not in request.files:
-                error_message ='No file part'
+                error_message = 'No file part'
                 raise Exception(error_message)
 
             file = request.files['submittedSolutionFile']
+            if not file:
+                error_message = 'Error uploading solution file.'
+                raise Exception(error_message)
 
             # if user does not select file, browser also
             # submit an empty part without filename
             if file.filename == '':
-                error_message ='No selected file'
-                raise Exception(error_message)
-            elif competition_tools.check_file(file, TEST_FILE_PATH) == False:
-                error_message = 'Wrong file schema.'
-                raise Exception(error_message)
-            elif competition_tools.allowed_file(file.filename) == False:
-                error_message ='Unsupported file format.'
+                error_message = 'No selected file'
                 raise Exception(error_message)
 
-            elif file:
+            if competition_tools.allowed_file(file.filename) and \
+                    competition_tools.check_file(file, TEST_FILE_PATH):
+
                 timestamp = competition_tools.get_timestamp()
                 new_file_name = f"{timestamp}_{user_id}.csv"
                 output_file = os.path.join(app.config['UPLOAD_FOLDER'], new_file_name)
@@ -174,6 +175,7 @@ def upload():
         traceback.print_exc()
         return redirect(url_for('error', error_message=ex))
 
+
 ################
 # Submit
 ################
@@ -182,7 +184,6 @@ def submit():
     submit_request_id = secrets.token_hex()
     session["submit_request_id"] = submit_request_id
     return render_template("submit.html", submit_request_id=submit_request_id)
-
 
 
 if __name__ == '__main__':

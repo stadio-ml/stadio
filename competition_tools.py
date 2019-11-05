@@ -60,7 +60,12 @@ def eval_public_private(submission, solution):
     return public_score, private_score
 
 def allowed_file(filename):
-    return os.path.splitext(filename.lower())[1] in ALLOWED_EXTENSIONS
+
+    if not os.path.splitext(filename.lower())[1] in ALLOWED_EXTENSIONS:
+        error_message = f'Unsupported file format. Allowed file formats are {ALLOWED_EXTENSIONS}'
+        raise Exception(error_message)
+
+    return True
 
 
 def get_timestamp():
