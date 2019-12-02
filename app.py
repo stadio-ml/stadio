@@ -14,8 +14,9 @@ from sqlalchemy import func
 from datetime import datetime
 
 # TODO Load configuration from config.yaml
+ADMIN_USER_ID = "prof"
 UPLOAD_FOLDER = './uploads'
-TEST_FILE_PATH = './static/test_solution/test_solution.csv'
+TEST_FILE_PATH = './static/test_solution/eval_solution.csv' #'./static/test_solution/test_solution.csv'
 MAX_FILE_SIZE = 32 * 1024 * 1024  # limit upload file size to 32MB
 API_FILE = 'mappings.dummy.json'
 DB_FILE = 'sqlite:///test.db'
@@ -143,10 +144,14 @@ def evaluate():
             traceback.print_exc()
             return redirect(url_for('error', error_message=ex))
 
-        evaluation = Evaluation(submission=submission, evaluation_public=public_score, evaluation_private=private_score)
-        db.session.add(evaluation)
-        db.session.commit()
-        return redirect(url_for('leaderboard', score=public_score, highlight=user_id))
+        if user_id == ADMIN_USER_ID:
+            return render_template('evaluation_score.html', pub_score=public_score, priv_score=private_score)
+
+        else:
+            evaluation = Evaluation(submission=submission, evaluation_public=public_score, evaluation_private=private_score)
+            db.session.add(evaluation)
+            db.session.commit()
+            return redirect(url_for('leaderboard', score=public_score, highlight=user_id))
 
 
 ################
@@ -176,7 +181,7 @@ def upload():
             if request.method == 'POST':
                 latest_submission = db.session.query(func.max(Submission.timestamp)).filter(Submission.user_id == user_id).first()[0]
                 now = datetime.utcnow()
-                if latest_submission and (now - latest_submission).total_seconds() < TIME_BETWEEN_SUBMISSIONS:
+                if (user_id != ADMIN_USER_ID) and latest_submission and (now - latest_submission).total_seconds() < TIME_BETWEEN_SUBMISSIONS:
                     delta = max(5, int(TIME_BETWEEN_SUBMISSIONS - (now - latest_submission).total_seconds())) # avoid messages such as "try again in 0/1/2 seconds" (TODO remove magic number 5)
                     raise Exception(f"You are exceeding the {TIME_BETWEEN_SUBMISSIONS} seconds limit between submissions. Please try again in {delta} seconds")
                 
