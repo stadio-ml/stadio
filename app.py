@@ -41,6 +41,9 @@ db.init_app(app)
 db.app = app
 db.create_all()
 
+
+competition_tools.check_solution_file(TEST_FILE_PATH)
+
 competition_tools.schedule_db_dump(app.config['CLOSE_TIME'], db, stage_name="CLOSE",
                                    dump_out=os.path.join(app.root_path, "dumps"))
 
