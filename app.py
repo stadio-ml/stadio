@@ -64,10 +64,8 @@ def error():
 def leaderboard():
     if stage_handler.is_ready():
         return render_template("ready.html", name=app.config['NAME'], open_time=stage_handler.open_time, close_time=stage_handler.close_time)
-    elif stage_handler.is_closed():
-        return render_template("over.html") # TODO freeze the final leaderboard and allow new submission
-    elif stage_handler.is_terminated(): # TODO handle this case
-        return render_template("over.html")
+    elif stage_handler.is_terminated():
+        return render_template("over.html", name=app.config['NAME'])
     else:
         # TODO: here, we assume that a higher score is preferable.
         # it might not always be like this (e.g. MSE)
@@ -87,7 +85,31 @@ def leaderboard():
                 score = score_mapper(float(score))
             except: # Just in case someone passes something nasty for `score`
                 score = None
-        return render_template("leaderboard.html", score=score, highlight_user_id=highlight_user_id, participants=participants)
+        return render_template("leaderboard.html",
+                               name=app.config["NAME"],
+                               score=score,
+                               highlight_user_id=highlight_user_id,
+                               participants=participants,
+                               can_submit=True,
+                               close_time=stage_handler.close_time,
+                               is_closed=stage_handler.is_closed())
+
+
+@app.route('/fleaderboard', methods=["GET"])
+def fleaderboard():
+    if not stage_handler.is_closed():
+        return redirect(url_for("leaderboard"))
+
+    participants = db.session \
+        .query(Submission.user_id, func.max(Evaluation.evaluation_private)) \
+        .join(Submission) \
+        .filter(Submission.timestamp < stage_handler.close_time) \
+        .group_by(Submission.user_id) \
+        .order_by(Evaluation.evaluation_private.desc()) \
+        .all()
+
+    return render_template("leaderboard.html", participants=participants, can_submit=False)
+
 
 ################
 # Evaluate
@@ -95,7 +117,7 @@ def leaderboard():
 @app.route('/evaluate', methods=["GET"])
 def evaluate():
     if not stage_handler.can_submit():
-        redirect(url_for('leaderboard'))
+        return redirect(url_for('leaderboard'))
     else:
         try:
             api_key = request.args.get("api_key")
@@ -127,8 +149,9 @@ def evaluate():
 ################
 @app.route('/upload', methods=["POST"])
 def upload():
+    # TODO Handle this. Doing so, a student who loaded the page before the deadline can still perform the submission
     if not stage_handler.can_submit():
-        redirect(url_for("leaderboard"))
+        return redirect(url_for("leaderboard"))
     else:
         error_message = ""
         # Check submit request id
@@ -197,7 +220,7 @@ def upload():
 @app.route('/submit', methods=["GET"])
 def submit():
     if not stage_handler.can_submit():
-        redirect(url_for("leaderboard"))
+        return redirect(url_for("leaderboard"))
     else:
         submit_request_id = secrets.token_hex()
         session["submit_request_id"] = submit_request_id
