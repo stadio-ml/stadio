@@ -1,9 +1,8 @@
 import traceback
 
-from flask import Flask, send_file, session, jsonify, redirect, flash, url_for, request
+from flask import Flask, session, redirect, url_for
 from flask import render_template, request
 from flask_cors import CORS
-from werkzeug.utils import secure_filename
 import competition_tools
 import os
 import secrets
@@ -49,6 +48,14 @@ competition_tools.schedule_db_dump(app.config['CLOSE_TIME'], db, stage_name="CLO
 
 competition_tools.schedule_db_dump(app.config['TERMINATE_TIME'], db, stage_name="TERMINATE",
                                    dump_out=os.path.join(app.root_path, "dumps"))
+
+
+def get_user_id(api_key):
+    if not api_auth.is_valid(api_key):
+        # TODO build dictionary of possible errors & avoid hardcoding strings
+        raise Exception("Invalid API key!")
+    user_id = api_auth.get_user(api_key)
+    return user_id
 
 ################
 # Error Handling
@@ -125,36 +132,34 @@ def fleaderboard():
 ################
 @app.route('/evaluate', methods=["GET"])
 def evaluate():
-    if not stage_handler.can_submit():
-        return redirect(url_for('leaderboard'))
-    else:
-        try:
-            api_key = request.args.get("api_key")
-            submission_id = request.args.get("submission_id")
-            if not api_auth.is_valid(api_key):
-                # TODO build dictionary of possible errors & avoid hardcoding strings
-                raise Exception("Invalid API key!")
+    try:
+        api_key = request.args.get("api_key")
+        user_id = get_user_id(api_key)
 
-            user_id = api_auth.get_user(api_key)
+        if (user_id != ADMIN_USER_ID) and (not stage_handler.can_submit()):
+            return redirect(url_for('leaderboard'))
+        else:
+
+            submission_id = request.args.get("submission_id")
             submission = Submission.query.filter_by(id=submission_id, user_id=user_id).first()
             public_score, private_score = eval_public_private(submission.filename, TEST_FILE_PATH)
             if not submission:
                 # not found!
                 raise Exception("Submission not found!")
 
-        except Exception as ex:
-            traceback.print_stack()
-            traceback.print_exc()
-            return redirect(url_for('error', error_message=ex))
+            if user_id == ADMIN_USER_ID:
+                return render_template('evaluation_score.html', pub_score=public_score, priv_score=private_score)
 
-        if user_id == ADMIN_USER_ID:
-            return render_template('evaluation_score.html', pub_score=public_score, priv_score=private_score)
+            else:
+                evaluation = Evaluation(submission=submission, evaluation_public=public_score, evaluation_private=private_score)
+                db.session.add(evaluation)
+                db.session.commit()
+                return redirect(url_for('leaderboard', score=public_score, highlight=user_id))
 
-        else:
-            evaluation = Evaluation(submission=submission, evaluation_public=public_score, evaluation_private=private_score)
-            db.session.add(evaluation)
-            db.session.commit()
-            return redirect(url_for('leaderboard', score=public_score, highlight=user_id))
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for('error', error_message=ex))
 
 
 ################
@@ -162,23 +167,21 @@ def evaluate():
 ################
 @app.route('/upload', methods=["POST"])
 def upload():
-    # TODO Handle this. Doing so, a student who loaded the page before the deadline can still perform the submission
-    if not stage_handler.can_submit():
-        return redirect(url_for("leaderboard"))
-    else:
-        error_message = ""
-        # Check submit request id
+    try:
+        api_key = request.form.get("api_key", None)
+        user_id = get_user_id(api_key)  # This will be stored in the Submissions table
 
-        try:
+        # TODO Handle this. Doing so, a student who loaded the page before the deadline can still perform the submission
+        if (user_id != ADMIN_USER_ID) and (not stage_handler.can_submit()):
+            return redirect(url_for("leaderboard"))
+        else:
+            error_message = ""
+            # Check submit request id
+
             if ("submit_request_id" not in session.keys()) or \
                     (session["submit_request_id"] != request.form.get('submitRequestId', None)):
                 error_message = "Wrong request. Use the form web page to upload a solution or try to reload the page!"
                 raise Exception(error_message)
-
-            api_key = request.form.get("APIKey", None)
-            if not api_auth.is_valid(api_key):
-                raise Exception("Invalid API key!")
-            user_id = api_auth.get_user(api_key)  # This will be stored in the Submissions table
 
             # Save submitted solution
             if request.method == 'POST':
@@ -187,7 +190,7 @@ def upload():
                 if (user_id != ADMIN_USER_ID) and latest_submission and (now - latest_submission).total_seconds() < TIME_BETWEEN_SUBMISSIONS:
                     delta = max(5, int(TIME_BETWEEN_SUBMISSIONS - (now - latest_submission).total_seconds())) # avoid messages such as "try again in 0/1/2 seconds" (TODO remove magic number 5)
                     raise Exception(f"You are exceeding the {TIME_BETWEEN_SUBMISSIONS} seconds limit between submissions. Please try again in {delta} seconds")
-                
+
                 # check if the post request has the file part
                 if 'submittedSolutionFile' not in request.files:
                     error_message = 'No file part'
@@ -221,10 +224,11 @@ def upload():
                     return redirect(url_for('evaluate', submission_id=submission.id, api_key=api_key))
                 else:
                     raise Exception("You should not be here!")
-        except Exception as ex:
-            traceback.print_stack()
-            traceback.print_exc()
-            return redirect(url_for('error', error_message=ex))
+
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for('error', error_message=ex))
 
 
 ################
@@ -232,13 +236,26 @@ def upload():
 ################
 @app.route('/submit', methods=["GET"])
 def submit():
-    if not stage_handler.can_submit():
-        return redirect(url_for("leaderboard"))
-    else:
-        submit_request_id = secrets.token_hex()
-        session["submit_request_id"] = submit_request_id
-        return render_template("submit.html", submit_request_id=submit_request_id)
+    try:
+        user_id = None
+        api_key = request.args.get("api_key", None)
+        if api_key is not None:
+            #print(f"Received request to submission page with api_key: '{api_key}'.")
+            app.logger.info(f"Received request to submission page with api_key: '{api_key}'.")
+            user_id = get_user_id(api_key)
+
+        if ((user_id is None) or (user_id != ADMIN_USER_ID)) and (not stage_handler.can_submit()):
+            return redirect(url_for("leaderboard"))
+        else:
+            submit_request_id = secrets.token_hex()
+            session["submit_request_id"] = submit_request_id
+            return render_template("submit.html", submit_request_id=submit_request_id, is_closed=stage_handler.is_closed())
+
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for('error', error_message=ex))
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=False)
+    app.run(host='0.0.0.0', port=8080, debug=True)

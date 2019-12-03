@@ -10,7 +10,11 @@
             {#                         width="72" height="72">#}
             <h1 class="">Data Science Lab</h1>
             <h1 class="h3 mb-3 font-weight-normal">Submission system</h1>
-
+            {%  if is_closed %}
+                <div class="alert alert-warning mt-3" role="alert">
+                    The competition is now CLOSED. You can still submit your solution but your score won't be stored in the FINAL LEADERBOARD.
+                </div>
+            {% endif %}
             <P>
                 <a href="/" class="btn btn-primary">Go to leaderboard</a>
 
@@ -21,7 +25,7 @@
             <label for="APIKey">API key</label>
             <input type="password"
                    id="APIKeyInput"
-                   name="APIKey"
+                   name="api_key"
                    class="form-control"
                    placeholder="A123456789"
                    value=""
