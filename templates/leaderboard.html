@@ -3,8 +3,21 @@
 {% block body %}
     <div class="text-center mb-4">
         <h1 class="">Data Science Lab</h1>
-        <h1 class="h3 mb-3 font-weight-normal">Leaderboard</h1>
-        <a href="/submit" class="btn btn-primary">New submission</a>
+        <h1 class="h3 mb-3 font-weight-normal">Leaderboard {{ name }} </h1>
+        
+        {% if can_submit %}
+            <a href="/submit" class="btn btn-primary">New submission</a>
+            {% if is_closed %}
+                <a href="/fleaderboard" class="btn btn-info">Final leaderboard</a>
+            {% else %}
+            <p>
+                <div class="alert alert-info">
+                    <strong>Deadline (UTC Time):</strong> {{ close_time }} 
+                </div>
+            </p>
+            {% endif %} 
+        {% endif %}
+
         {% if score %}
             <div class="alert alert-success mt-3" role="alert">
                 The score for you current submission is: {{ score }}

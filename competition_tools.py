@@ -1,6 +1,7 @@
 import datetime
 import pandas as pd
 import os
+from enum import Enum
 from evaluation_functions import evaluator
 
 ALLOWED_EXTENSIONS = {'.csv'}
@@ -71,3 +72,47 @@ def allowed_file(filename):
 def get_timestamp():
     timestamp_id = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%s")
     return timestamp_id
+
+
+class Stage(Enum):
+    READY = 0
+    OPEN = 1
+    CLOSED = 2
+    TERMINATED = 3
+
+
+class StageHandler:
+    def __init__(self, open_time, close_time, terminate_time):
+        self.open_time = datetime.datetime.strptime(open_time, "%Y/%m/%d %H:%M:%S")
+        self.close_time = datetime.datetime.strptime(close_time, "%Y/%m/%d %H:%M:%S")
+        self.terminate_time = datetime.datetime.strptime(terminate_time, "%Y/%m/%d %H:%M:%S")
+
+        if self.close_time > self.terminate_time or self.open_time > self.close_time:
+            raise RuntimeError('Competition dates order is wrong!')
+
+    def _get_stage(self):
+        now = datetime.datetime.utcnow()
+        stage = Stage.TERMINATED
+        if now < self.terminate_time:
+            stage = Stage.CLOSED
+        if now < self.close_time:
+            stage = Stage.OPEN
+        if now < self.open_time:
+            stage = Stage.READY
+        return stage
+
+    def is_ready(self):
+        return self._get_stage() == Stage.READY
+
+    def is_open(self):
+        return self._get_stage() == Stage.OPEN
+
+    def is_closed(self):
+        return self._get_stage() == Stage.CLOSED
+
+    def is_terminated(self):
+        return self._get_stage() == Stage.TERMINATED
+
+    def can_submit(self):
+        stage = self._get_stage() 
+        return stage == Stage.OPEN or stage == Stage.CLOSED
