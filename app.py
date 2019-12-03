@@ -14,7 +14,10 @@ from datetime import datetime
 
 # TODO Load configuration from config.yaml
 ADMIN_USER_ID = "prof"
+BASELINE_USER_ID = "baseline"
+
 UPLOAD_FOLDER = './uploads'
+DUMP_FOLDER = './dumps'
 TEST_FILE_PATH = './static/test_solution/eval_solution.csv' #'./static/test_solution/test_solution.csv'
 MAX_FILE_SIZE = 32 * 1024 * 1024  # limit upload file size to 32MB
 API_FILE = 'mappings.dummy.json'
@@ -23,7 +26,7 @@ TIME_BETWEEN_SUBMISSIONS = 5 * 60 # 5 minutes between submissions
 
 # function that maps db-stored score to printable value
 # TODO: move somewhere appropriate
-score_mapper = lambda score: f"{score * 100:.2f}"
+score_mapper = lambda score: f"{score :.3f}"
 
 app = Flask(__name__, static_url_path="", static_folder="static")
 app.config.from_object("config.CompetitionConfig")
@@ -43,11 +46,9 @@ db.create_all()
 
 competition_tools.check_solution_file(TEST_FILE_PATH)
 
-competition_tools.schedule_db_dump(app.config['CLOSE_TIME'], db, stage_name="CLOSE",
-                                   dump_out=os.path.join(app.root_path, "dumps"))
+competition_tools.schedule_db_dump(app.config['CLOSE_TIME'], db, stage_name="CLOSE", dump_out=DUMP_FOLDER)
 
-competition_tools.schedule_db_dump(app.config['TERMINATE_TIME'], db, stage_name="TERMINATE",
-                                   dump_out=os.path.join(app.root_path, "dumps"))
+competition_tools.schedule_db_dump(app.config['TERMINATE_TIME'], db, stage_name="TERMINATE", dump_out=DUMP_FOLDER)
 
 
 def get_user_id(api_key):
@@ -78,42 +79,70 @@ def error():
 
 @app.route('/', methods=["GET"])
 def leaderboard():
-    if stage_handler.is_ready():
-        return render_template("ready.html", name=app.config['NAME'], open_time=stage_handler.open_time, close_time=stage_handler.close_time)
-    elif stage_handler.is_terminated():
-        return render_template("over.html", name=app.config['NAME'])
-    else:
-        # TODO: here, we assume that a higher score is preferable.
-        # it might not always be like this (e.g. MSE)
-        # For those cases, func.min should be used: make this parameter
-        # configurable from config file
-        participants = db.session \
-            .query(Submission.user_id, func.max(Evaluation.evaluation_public)) \
-            .join(Submission) \
-            .group_by(Submission.user_id) \
-            .order_by(Evaluation.evaluation_public.desc()) \
-            .all()
-        score = request.args.get("score")
-        highlight_user_id = request.args.get("highlight")
-        participants = [ (user_id, score_mapper(score)) for user_id, score in participants ]
-        if score:
-            try:
-                score = score_mapper(float(score))
-            except: # Just in case someone passes something nasty for `score`
-                score = None
-        return render_template("leaderboard.html",
-                               name=app.config["NAME"],
-                               score=score,
-                               highlight_user_id=highlight_user_id,
-                               participants=participants,
-                               can_submit=True,
-                               close_time=stage_handler.close_time,
-                               is_closed=stage_handler.is_closed())
+    try:
+        user_id = None
+        api_key = request.args.get("api_key", None)
+        if api_key is not None:
+            user_id = get_user_id(api_key)
+            app.logger.info(f"Received request to leaderboard page by user_id '{user_id}'.")
+
+        if ((user_id is None) or (user_id not in [ADMIN_USER_ID])) and \
+                stage_handler.is_ready():
+            return render_template("ready.html", name=app.config['NAME'], open_time=stage_handler.open_time, close_time=stage_handler.close_time)
+        elif ((user_id is None) or (user_id not in [ADMIN_USER_ID])) and \
+                stage_handler.is_terminated():
+            return render_template("over.html", name=app.config['NAME'])
+        else:
+            # TODO: here, we assume that a higher score is preferable.
+            # it might not always be like this (e.g. MSE)
+            # For those cases, func.min should be used: make this parameter
+            # configurable from config file
+            participants = db.session \
+                .query(Submission.user_id, func.max(Evaluation.evaluation_public)) \
+                .join(Submission) \
+                .group_by(Submission.user_id) \
+                .order_by(Evaluation.evaluation_public.desc()) \
+                .all()
+            score = request.args.get("score")
+            highlight_user_id = request.args.get("highlight")
+            participants = [ (user_id, score_mapper(score)) for user_id, score in participants ]
+            if score:
+                try:
+                    score = score_mapper(float(score))
+                except: # Just in case someone passes something nasty for `score`
+                    score = None
+            return render_template("leaderboard.html",
+                                   name=app.config["NAME"],
+                                   score=score,
+                                   highlight_user_id=highlight_user_id,
+                                   participants=participants,
+                                   can_submit=True,
+                                   close_time=stage_handler.close_time,
+                                   is_closed=stage_handler.is_closed())
+
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for('error', error_message=ex))
 
 
 @app.route('/fleaderboard', methods=["GET"])
 def fleaderboard():
-    if not stage_handler.is_closed():
+
+    try:
+        user_id = None
+        api_key = request.args.get("api_key", None)
+        if api_key is not None:
+            user_id = get_user_id(api_key)
+            app.logger.info(f"Received request to leaderboard page by user_id '{user_id}'.")
+
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for('error', error_message=ex))
+
+    if ((user_id is None) or (user_id not in [ADMIN_USER_ID])) and \
+            not stage_handler.is_closed():
         return redirect(url_for("leaderboard"))
 
     participants = db.session \
@@ -124,8 +153,19 @@ def fleaderboard():
         .order_by(Evaluation.evaluation_private.desc()) \
         .all()
 
+    participants = [(user_id, score_mapper(score)) for user_id, score in participants]
+
     return render_template("leaderboard.html", participants=participants, can_submit=False)
 
+################
+# Show evaluate score
+################
+@app.route('/show_evaluate_score', methods=["GET"])
+def show_evaluate_score():
+    return render_template('evaluation_score.html',
+                           pub_score=request.args.get("pub_score"),
+                           priv_score=request.args.get("priv_score"),
+                           baseline=int(request.args.get("baseline")))
 
 ################
 # Evaluate
@@ -136,7 +176,8 @@ def evaluate():
         api_key = request.args.get("api_key")
         user_id = get_user_id(api_key)
 
-        if (user_id != ADMIN_USER_ID) and (not stage_handler.can_submit()):
+        if (user_id not in [ADMIN_USER_ID, BASELINE_USER_ID]) and\
+                (not stage_handler.can_submit()):
             return redirect(url_for('leaderboard'))
         else:
 
@@ -148,13 +189,18 @@ def evaluate():
                 raise Exception("Submission not found!")
 
             if user_id == ADMIN_USER_ID:
-                return render_template('evaluation_score.html', pub_score=public_score, priv_score=private_score)
-
+                return redirect(
+                    url_for("show_evaluate_score", pub_score=public_score, priv_score=private_score, baseline=0))
             else:
                 evaluation = Evaluation(submission=submission, evaluation_public=public_score, evaluation_private=private_score)
                 db.session.add(evaluation)
                 db.session.commit()
-                return redirect(url_for('leaderboard', score=public_score, highlight=user_id))
+
+                if user_id == BASELINE_USER_ID:
+                    return redirect(
+                        url_for("show_evaluate_score", pub_score=public_score, priv_score=private_score, baseline=1))
+                else:
+                    return redirect(url_for('leaderboard', score=public_score, highlight=user_id))
 
     except Exception as ex:
         traceback.print_stack()
@@ -172,7 +218,8 @@ def upload():
         user_id = get_user_id(api_key)  # This will be stored in the Submissions table
 
         # TODO Handle this. Doing so, a student who loaded the page before the deadline can still perform the submission
-        if (user_id != ADMIN_USER_ID) and (not stage_handler.can_submit()):
+        if (user_id not in [ADMIN_USER_ID, BASELINE_USER_ID]) and\
+                (not stage_handler.can_submit()):
             return redirect(url_for("leaderboard"))
         else:
             error_message = ""
@@ -187,7 +234,9 @@ def upload():
             if request.method == 'POST':
                 latest_submission = db.session.query(func.max(Submission.timestamp)).filter(Submission.user_id == user_id).first()[0]
                 now = datetime.utcnow()
-                if (user_id != ADMIN_USER_ID) and latest_submission and (now - latest_submission).total_seconds() < TIME_BETWEEN_SUBMISSIONS:
+                if (user_id not in [ADMIN_USER_ID, BASELINE_USER_ID]) and \
+                        latest_submission and \
+                        (now - latest_submission).total_seconds() < TIME_BETWEEN_SUBMISSIONS:
                     delta = max(5, int(TIME_BETWEEN_SUBMISSIONS - (now - latest_submission).total_seconds())) # avoid messages such as "try again in 0/1/2 seconds" (TODO remove magic number 5)
                     raise Exception(f"You are exceeding the {TIME_BETWEEN_SUBMISSIONS} seconds limit between submissions. Please try again in {delta} seconds")
 
@@ -240,11 +289,11 @@ def submit():
         user_id = None
         api_key = request.args.get("api_key", None)
         if api_key is not None:
-            #print(f"Received request to submission page with api_key: '{api_key}'.")
-            app.logger.info(f"Received request to submission page with api_key: '{api_key}'.")
             user_id = get_user_id(api_key)
+            app.logger.info(f"Received request to submission page by user_id '{user_id}'.")
 
-        if ((user_id is None) or (user_id != ADMIN_USER_ID)) and (not stage_handler.can_submit()):
+        if ((user_id is None) or (user_id not in [ADMIN_USER_ID])) and\
+                (not stage_handler.can_submit()):
             return redirect(url_for("leaderboard"))
         else:
             submit_request_id = secrets.token_hex()
@@ -258,4 +307,4 @@ def submit():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=False)
