@@ -8,11 +8,42 @@ from enum import Enum
 from evaluation_functions import evaluator
 from sqlalchemy import inspect
 
+import numpy as np
+
 ALLOWED_EXTENSIONS = {'.csv'}
-HEADER = ["Id", "Predicted"]
+
 INDEX = "Id"
 TARGET = "Predicted"
 PUBLIC = "Public"
+
+HEADER = [INDEX, TARGET]
+SOLUTION_HEADER = [INDEX, TARGET, PUBLIC]
+
+
+def check_solution_file(solution_file):
+    print(f"Checking solution file '{solution_file}'...")
+    try:
+        solution_df = pd.read_csv(solution_file, index_col=INDEX)
+        solution_columns = list(solution_df.columns) + [INDEX]
+        # check file schema
+        if not (all([h in solution_columns for h in SOLUTION_HEADER]) == True):
+            missing_cols = [h for h in SOLUTION_HEADER if h not in solution_columns]
+            raise Exception(
+                f"Missing columns {missing_cols} in the solution file with columns {solution_columns}.")
+
+        if len(solution_columns) > len(SOLUTION_HEADER):
+            raise Exception(f"Too many columns - Expecting columns {SOLUTION_HEADER} in the solution file.")
+
+        if (len(solution_df[PUBLIC].unique()) != 2) or\
+                (not all([(v in [0, 1]) for v in solution_df[PUBLIC].unique()])):
+            raise Exception(f"Public column should contains only 0 and 1 where:\n - 1 means public\n - 0 means private")
+
+    except Exception as ex:
+        raise Exception(f"Test solution error - File: {solution_file} - {ex}")
+
+    print(f"Solution file is valid.")
+    return True
+
 
 def check_file(file, test_file):
     try:
@@ -58,10 +89,10 @@ def eval_public_private(submission, solution):
 
     y_pred_private = df_pred[~public_mask][TARGET].values
     y_true_private = df_true[~public_mask][TARGET].values
-    
+
     public_score = evaluator(y_true_public, y_pred_public)
     private_score = evaluator(y_true_private, y_pred_private)
-    
+
     return public_score, private_score
 
 def allowed_file(filename):
@@ -149,5 +180,5 @@ class StageHandler:
         return self._get_stage() == Stage.TERMINATED
 
     def can_submit(self):
-        stage = self._get_stage() 
+        stage = self._get_stage()
         return stage == Stage.OPEN or stage == Stage.CLOSED
