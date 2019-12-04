@@ -1,8 +1,12 @@
 import datetime
+import sys
+import threading
+
 import pandas as pd
 import os
 from enum import Enum
 from evaluation_functions import evaluator
+from sqlalchemy import inspect
 
 ALLOWED_EXTENSIONS = {'.csv'}
 HEADER = ["Id", "Predicted"]
@@ -73,6 +77,37 @@ def get_timestamp():
     timestamp_id = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%s")
     return timestamp_id
 
+
+def schedule_db_dump(sched_time, db, stage_name, dump_out):
+
+    if not os.path.isdir(dump_out):
+        print(f"Dump folder '{dump_out}' not exist! Create it!")
+        sys.exit(-1)
+
+    now = datetime.datetime.utcnow()
+
+    parsed_sched_time = datetime.datetime.strptime(sched_time, "%Y/%m/%d %H:%M:%S")
+    delay = (parsed_sched_time - now).total_seconds()
+
+    def dumb_db_dump(db, stage_name, dump_out):
+        dump_time = datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        inspector = inspect(db.engine)
+
+        for t_name in inspector.get_table_names():
+            dest_path = os.path.join(dump_out, f"{t_name}_{stage_name}_{dump_time}_dump.csv")
+
+            print(f"Loading table '{t_name}'...")
+            t_df = pd.read_sql_table(t_name, con=db.engine)
+
+            print(f"Dumping {t_name} to {dest_path}")
+            t_df.to_csv(dest_path, index=False)
+    if delay > 0:
+        threading\
+            .Timer(delay, dumb_db_dump, kwargs={"db": db, "stage_name": stage_name, "dump_out": dump_out})\
+            .start()
+        print(f"Scheduled DB dump in {delay} seconds for stage {stage_name}.")
+    else:
+        print("DB dump not scheduled. Negative delay!")
 
 class Stage(Enum):
     READY = 0

@@ -40,6 +40,11 @@ db.init_app(app)
 db.app = app
 db.create_all()
 
+competition_tools.schedule_db_dump(app.config['CLOSE_TIME'], db, stage_name="CLOSE",
+                                   dump_out=os.path.join(app.root_path, "dumps"))
+
+competition_tools.schedule_db_dump(app.config['TERMINATE_TIME'], db, stage_name="TERMINATE",
+                                   dump_out=os.path.join(app.root_path, "dumps"))
 
 ################
 # Error Handling
@@ -228,4 +233,4 @@ def submit():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=False)
