@@ -239,15 +239,14 @@ def fleaderboard():
         api_key = request.args.get("api_key", None)
         if api_key is not None:
             user_id = get_user_id(api_key)
-            app.logger.info(f"Received request to leaderboard page by user_id '{user_id}'.")
+            app.logger.info(f"Received request to final leaderboard page by user_id '{user_id}'.")
 
     except Exception as ex:
         traceback.print_stack()
         traceback.print_exc()
         return redirect(url_for('error', error_message=ex))
 
-    if ((user_id is None) or (user_id not in [ADMIN_USER_ID])) and \
-            not stage_handler.is_closed():
+    if ((user_id is None) or (user_id not in [ADMIN_USER_ID])):
         return redirect(url_for("leaderboard"))
 
     participants = []

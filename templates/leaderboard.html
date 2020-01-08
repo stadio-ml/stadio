@@ -6,17 +6,19 @@
         <h1 class="h3 mb-3 font-weight-normal">Leaderboard {{ name }} </h1>
 
         {% if can_submit %}
+
             <a href="/submit" class="btn btn-primary">New submission</a>
             <a href="/submissions" class="btn btn-primary">Check submissions</a>
 
             {% if is_closed %}
-                <a href="/fleaderboard" class="btn btn-info">Final leaderboard</a>
+{#                <a href="/fleaderboard" class="btn btn-info">Final leaderboard</a>#}
+                <div class="alert alert-warning mt-2">
+                        The competition is now CLOSED.
+                    </div>
             {% else %}
-            <p>
-                <div class="alert alert-info">
+                <div class="alert alert-info mt-2">
                     <strong>Deadline (UTC Time):</strong> {{ close_time }}
                 </div>
-            </p>
             {% endif %}
         {% endif %}
 
@@ -39,15 +41,15 @@
 
             {% if user_id == "baseline" %}
                 <tr class="table-secondary">
-            {% elif user_id == highlight_user_id %}
+                    {% elif user_id == highlight_user_id %}
                 <tr class="table-primary">
-            {% else %}
+                    {% else %}
                 <tr>
             {% endif %}
-                    <th scope="row">{{ loop.index }}</th>
-                    <td>{{ user_id }}</td>
-                    <td>{{ score }}</td>
-                </tr>
+        <th scope="row">{{ loop.index }}</th>
+        <td>{{ user_id }}</td>
+        <td>{{ score }}</td>
+        </tr>
 
 
         {% endfor %}
