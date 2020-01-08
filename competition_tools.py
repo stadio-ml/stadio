@@ -19,6 +19,9 @@ PUBLIC = "Public"
 HEADER = [INDEX, TARGET]
 SOLUTION_HEADER = [INDEX, TARGET, PUBLIC]
 
+# function that maps db-stored score to printable value
+# TODO: move somewhere appropriate
+score_mapper = lambda score: f"{score :.3f}"
 
 def check_solution_file(solution_file):
     print(f"Checking solution file '{solution_file}'...")

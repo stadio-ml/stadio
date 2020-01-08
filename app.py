@@ -12,43 +12,24 @@ from competition_tools import eval_public_private, StageHandler
 from sqlalchemy import func
 from datetime import datetime
 
-# TODO Load configuration from config.yaml
-ADMIN_USER_ID = "prof"
-BASELINE_USER_ID = "baseline"
-
-UPLOAD_FOLDER = './uploads'
-DUMP_FOLDER = './dumps'
-TEST_FILE_PATH = './static/test_solution/test_solution.csv' #'./static/test_solution/eval_solution.csv'
-MAX_FILE_SIZE = 32 * 1024 * 1024  # limit upload file size to 32MB
-API_FILE = 'mappings.dummy.json'
-DB_FILE = 'sqlite:///test.db'
-TIME_BETWEEN_SUBMISSIONS = 1 #5 * 60 # 5 minutes between submissions
-
-# function that maps db-stored score to printable value
-# TODO: move somewhere appropriate
-score_mapper = lambda score: f"{score :.3f}"
-
 app = Flask(__name__, static_url_path="", static_folder="static")
 app.config.from_object("config.CompetitionConfig")
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 app.secret_key = os.urandom(24)
 
 CORS(app)
 
 stage_handler = StageHandler(app.config['OPEN_TIME'], app.config['CLOSE_TIME'], app.config['TERMINATE_TIME'])
-api_auth = ApiAuth(API_FILE)
-app.config["SQLALCHEMY_DATABASE_URI"] = DB_FILE
+api_auth = ApiAuth(app.config['API_FILE'])
+app.config["SQLALCHEMY_DATABASE_URI"] = app.config['DB_FILE']
 db.init_app(app)
 db.app = app
 db.create_all()
 
+competition_tools.check_solution_file(app.config['TEST_FILE_PATH'])
 
-competition_tools.check_solution_file(TEST_FILE_PATH)
+competition_tools.schedule_db_dump(app.config['CLOSE_TIME'], db, stage_name="CLOSE", dump_out=app.config['DUMP_FOLDER'])
 
-competition_tools.schedule_db_dump(app.config['CLOSE_TIME'], db, stage_name="CLOSE", dump_out=DUMP_FOLDER)
-
-competition_tools.schedule_db_dump(app.config['TERMINATE_TIME'], db, stage_name="TERMINATE", dump_out=DUMP_FOLDER)
+competition_tools.schedule_db_dump(app.config['TERMINATE_TIME'], db, stage_name="TERMINATE", dump_out=app.config['DUMP_FOLDER'])
 
 
 def get_user_id(api_key):
@@ -161,7 +142,7 @@ def submissions():
                 .filter_by(user_id=user_id) \
                 .all()
             print(user_submissions)
-            user_submissions = [(s_id, timestamp, user_id, score_mapper(score), check)
+            user_submissions = [(s_id, timestamp, user_id, competition_tools.score_mapper(score), check)
                                 for s_id, timestamp, user_id, score, check in user_submissions]
             return render_template("submissions.html",
                                    submissions_request_id=session["submissions_request_id"],
@@ -188,10 +169,10 @@ def leaderboard():
             user_id = get_user_id(api_key)
             app.logger.info(f"Received request to leaderboard page by user_id '{user_id}'.")
 
-        if ((user_id is None) or (user_id not in [ADMIN_USER_ID])) and \
+        if ((user_id is None) or (user_id not in [app.config['ADMIN_USER_ID']])) and \
                 stage_handler.is_ready():
             return render_template("ready.html", name=app.config['NAME'], open_time=stage_handler.open_time, close_time=stage_handler.close_time)
-        elif ((user_id is None) or (user_id not in [ADMIN_USER_ID])) and \
+        elif ((user_id is None) or (user_id not in [app.config['ADMIN_USER_ID']])) and \
                 stage_handler.is_terminated():
             return render_template("over.html", name=app.config['NAME'])
         else: # Get the leaderboard
@@ -207,10 +188,10 @@ def leaderboard():
                 .all()
             score = request.args.get("score")
             highlight_user_id = request.args.get("highlight")
-            participants = [(user_id, score_mapper(score)) for user_id, score in participants]
+            participants = [(user_id, competition_tools.score_mapper(score)) for user_id, score in participants]
             if score:
                 try:
-                    score = score_mapper(float(score))
+                    score = competition_tools.score_mapper(float(score))
                 except: # Just in case someone passes something nasty for `score`
                     score = None
             return render_template("leaderboard.html",
@@ -246,7 +227,7 @@ def fleaderboard():
         traceback.print_exc()
         return redirect(url_for('error', error_message=ex))
 
-    if ((user_id is None) or (user_id not in [ADMIN_USER_ID])):
+    if ((user_id is None) or (user_id not in [app.config['ADMIN_USER_ID']])):
         return redirect(url_for("leaderboard"))
 
     participants = []
@@ -284,7 +265,7 @@ def fleaderboard():
 
     # Sort the scores
     participants = sorted(participants, key=lambda x: x[1], reverse=True)
-    participants = [(user_id, score_mapper(score)) for user_id, score in participants]
+    participants = [(user_id, competition_tools.score_mapper(score)) for user_id, score in participants]
 
     return render_template("leaderboard.html", participants=participants, can_submit=False)
 
@@ -307,19 +288,19 @@ def evaluate():
         api_key = request.args.get("api_key")
         user_id = get_user_id(api_key)
 
-        if (user_id not in [ADMIN_USER_ID, BASELINE_USER_ID]) and\
+        if (user_id not in [app.config['ADMIN_USER_ID'], app.config['BASELINE_USER_ID']]) and\
                 (not stage_handler.can_submit()):
             return redirect(url_for('leaderboard'))
         else:
 
             submission_id = request.args.get("submission_id")
             submission = Submission.query.filter_by(id=submission_id, user_id=user_id).first()
-            public_score, private_score = eval_public_private(submission.filename, TEST_FILE_PATH)
+            public_score, private_score = eval_public_private(submission.filename, app.config['TEST_FILE_PATH'])
             if not submission:
                 # not found!
                 raise Exception("Submission not found!")
 
-            if user_id == ADMIN_USER_ID:
+            if user_id == app.config['ADMIN_USER_ID']:
                 return redirect(
                     url_for("show_evaluate_score", pub_score=public_score, priv_score=private_score, baseline=0))
             else:
@@ -327,7 +308,7 @@ def evaluate():
                 db.session.add(evaluation)
                 db.session.commit()
 
-                if user_id == BASELINE_USER_ID:
+                if user_id == app.config['BASELINE_USER_ID']:
                     return redirect(
                         url_for("show_evaluate_score", pub_score=public_score, priv_score=private_score, baseline=1))
                 else:
@@ -349,7 +330,7 @@ def upload():
         user_id = get_user_id(api_key)  # This will be stored in the Submissions table
 
         # TODO Handle this. Doing so, a student who loaded the page before the deadline can still perform the submission
-        if (user_id not in [ADMIN_USER_ID, BASELINE_USER_ID]) and\
+        if (user_id not in [app.config['ADMIN_USER_ID'], app.config['BASELINE_USER_ID']]) and\
                 (not stage_handler.can_submit()):
             return redirect(url_for("leaderboard"))
         else:
@@ -365,11 +346,11 @@ def upload():
             if request.method == 'POST':
                 latest_submission = db.session.query(func.max(Submission.timestamp)).filter(Submission.user_id == user_id).first()[0]
                 now = datetime.utcnow()
-                if (user_id not in [ADMIN_USER_ID, BASELINE_USER_ID]) and \
+                if (user_id not in [app.config['ADMIN_USER_ID'], app.config['BASELINE_USER_ID']]) and \
                         latest_submission and \
-                        (now - latest_submission).total_seconds() < TIME_BETWEEN_SUBMISSIONS:
-                    delta = max(5, int(TIME_BETWEEN_SUBMISSIONS - (now - latest_submission).total_seconds())) # avoid messages such as "try again in 0/1/2 seconds" (TODO remove magic number 5)
-                    raise Exception(f"You are exceeding the {TIME_BETWEEN_SUBMISSIONS} seconds limit between submissions. Please try again in {delta} seconds")
+                        (now - latest_submission).total_seconds() < app.config['TIME_BETWEEN_SUBMISSIONS']:
+                    delta = max(5, int(app.config['TIME_BETWEEN_SUBMISSIONS'] - (now - latest_submission).total_seconds())) # avoid messages such as "try again in 0/1/2 seconds" (TODO remove magic number 5)
+                    raise Exception(f"You are exceeding the {app.config['TIME_BETWEEN_SUBMISSIONS']} seconds limit between submissions. Please try again in {delta} seconds")
 
                 # check if the post request has the file part
                 if 'submittedSolutionFile' not in request.files:
@@ -388,7 +369,7 @@ def upload():
                     raise Exception(error_message)
 
                 if competition_tools.allowed_file(file.filename) and \
-                        competition_tools.check_file(file, TEST_FILE_PATH):
+                        competition_tools.check_file(file, app.config['TEST_FILE_PATH']):
 
                     timestamp = competition_tools.get_timestamp()
                     new_file_name = f"{timestamp}_{user_id}.csv"
@@ -423,7 +404,7 @@ def submit():
             user_id = get_user_id(api_key)
             app.logger.info(f"Received request to submission page by user_id '{user_id}'.")
 
-        if ((user_id is None) or (user_id not in [ADMIN_USER_ID])) and\
+        if ((user_id is None) or (user_id not in [app.config['ADMIN_USER_ID']])) and\
                 (not stage_handler.can_submit()):
             return redirect(url_for("leaderboard"))
         else:
