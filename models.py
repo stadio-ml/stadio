@@ -18,3 +18,4 @@ class Evaluation(db.Model):
     evaluation_public = db.Column(db.Numeric, nullable=False)
     evaluation_private = db.Column(db.Numeric, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    private_check = db.Column(db.Boolean, default=False, nullable=False)

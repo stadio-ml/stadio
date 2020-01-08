@@ -4,15 +4,11 @@
 
     <form class="was-validated" action="/upload" method="POST" enctype="multipart/form-data">
         <div class="text-center mb-4">
-            {#                    <img class="mb-4"#}
-            {#                         src="https://getbootstrap.com/docs/4.0/assets/brand/bootstrap-solid.svg"#}
-            {#                         alt=""#}
-            {#                         width="72" height="72">#}
             <h1 class="">Data Science Lab</h1>
             <h1 class="h3 mb-3 font-weight-normal">Submission system</h1>
             {%  if is_closed %}
                 <div class="alert alert-warning mt-3" role="alert">
-                    The competition is now CLOSED. You can still submit your solution but your score won't be stored in the FINAL LEADERBOARD.
+                    The competition is now CLOSED. {# You can still submit your solution but your score won't be stored in the FINAL LEADERBOARD. #}
                 </div>
             {% endif %}
             <P>
@@ -21,6 +17,7 @@
             </p>
         </div>
 
+    {%  if not is_closed %}
         <div class="form-label-group mb-3">
             <label for="APIKey">API key</label>
             <input type="password"
@@ -51,5 +48,6 @@
             <button class="btn btn-lg btn-primary btn-block" type="submit">Submit</button>
         </div>
     </form>
+    {% endif %}
 
 {% endblock %}

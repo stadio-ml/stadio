@@ -18,11 +18,11 @@ BASELINE_USER_ID = "baseline"
 
 UPLOAD_FOLDER = './uploads'
 DUMP_FOLDER = './dumps'
-TEST_FILE_PATH = './static/test_solution/eval_solution.csv' #'./static/test_solution/test_solution.csv'
+TEST_FILE_PATH = './static/test_solution/test_solution.csv' #'./static/test_solution/eval_solution.csv'
 MAX_FILE_SIZE = 32 * 1024 * 1024  # limit upload file size to 32MB
 API_FILE = 'mappings.dummy.json'
 DB_FILE = 'sqlite:///test.db'
-TIME_BETWEEN_SUBMISSIONS = 5 * 60 # 5 minutes between submissions
+TIME_BETWEEN_SUBMISSIONS = 1 #5 * 60 # 5 minutes between submissions
 
 # function that maps db-stored score to printable value
 # TODO: move somewhere appropriate
@@ -77,9 +77,109 @@ def error():
     return render_template('error.html', error_message=str(error_message))
 
 
+####################
+# update submissions
+####################
+@app.route('/update_submissions', methods=["POST"])
+def update_submissions():
+    if not api_auth.is_valid(session["api_key"]):
+        raise Exception("Invalid API key!")
+
+    user_id = api_auth.get_user(session["api_key"])
+    checked_submission_ids = [int(checked_s_id) for checked_s_id in request.form]
+    print("checked_submission_ids:", checked_submission_ids)
+
+    try:
+        with_success=True
+        user_evals = db.session.query(Evaluation).join(Submission).filter_by(user_id=user_id).all()
+
+        if len(user_evals) > 2:
+            raise Exception(f"Only two submissions can be selected for the final evaluation. You selected {len(user_evals)}.")
+
+        print("user_evals:", user_evals)
+
+        for e in user_evals:
+            e.private_check = False
+            if e.submission_id in checked_submission_ids:
+                e.private_check = True
+
+        db.session.commit()
+
+    except Exception as ex:
+        with_success = False
+        db.session.rollback()
+
+    return render_template("update_submissions.html", with_success=with_success)
+
+################
+# submissions
+################
+@app.route('/submissions', methods=["GET", "POST"])
+def submissions():
+    # TODO allow to admins the access
+    if stage_handler.is_ready():
+        return render_template("ready.html", name=app.config['NAME'], open_time=stage_handler.open_time,
+                               close_time=stage_handler.close_time)
+
+    if stage_handler.is_terminated():
+        return render_template("over.html", name=app.config['NAME'])
+
+    # Get API key from submissions form and show submissions
+    api_key = request.form.get("APIKey", None)
+
+    if api_key is None:
+        submissions_request_id = secrets.token_hex()
+        session["submissions_request_id"] = submissions_request_id
+        return render_template("submissions.html",
+                               submissions_request_id=submissions_request_id,
+                               is_closed=stage_handler.is_closed())
+    else:
+        try:
+            if ("submissions_request_id" not in session.keys()) or \
+                    (session["submissions_request_id"] != request.form.get('submissionsRequestId', None)):
+                error_message = "Wrong request. Use the form web page to upload a solution or try to reload the page!"
+                raise Exception(error_message)
+            if not api_auth.is_valid(api_key):
+                raise Exception("Invalid API key!")
+
+            session["api_key"] = api_key
+            user_id = api_auth.get_user(api_key)
+
+            app.logger.info(f"Received request to check submissions page by user_id '{user_id}'.")
+
+            Submission.query.filter_by(user_id=user_id).all()
+
+            user_submissions = db.session \
+                .query(Submission.id,
+                       Submission.user_id,
+                       Submission.timestamp,
+                       Evaluation.evaluation_public,
+                       Evaluation.private_check) \
+                .join(Submission) \
+                .filter_by(user_id=user_id) \
+                .all()
+            print(user_submissions)
+            user_submissions = [(s_id, timestamp, user_id, score_mapper(score), check)
+                                for s_id, timestamp, user_id, score, check in user_submissions]
+            return render_template("submissions.html",
+                                   submissions_request_id=session["submissions_request_id"],
+                                   user_id=user_id,
+                                   user_submissions=user_submissions,
+                                   is_closed=stage_handler.is_closed())
+
+        except Exception as ex:
+            traceback.print_stack()
+            traceback.print_exc()
+            return redirect(url_for('error', error_message=ex))
+
+################
+# leaderboard
+################
+
 @app.route('/', methods=["GET"])
 def leaderboard():
     try:
+        # To allow access to admins even is competition is ready or over
         user_id = None
         api_key = request.args.get("api_key", None)
         if api_key is not None:
@@ -92,7 +192,7 @@ def leaderboard():
         elif ((user_id is None) or (user_id not in [ADMIN_USER_ID])) and \
                 stage_handler.is_terminated():
             return render_template("over.html", name=app.config['NAME'])
-        else:
+        else: # Get the leaderboard
             # TODO: here, we assume that a higher score is preferable.
             # it might not always be like this (e.g. MSE)
             # For those cases, func.min should be used: make this parameter
@@ -105,7 +205,7 @@ def leaderboard():
                 .all()
             score = request.args.get("score")
             highlight_user_id = request.args.get("highlight")
-            participants = [ (user_id, score_mapper(score)) for user_id, score in participants ]
+            participants = [(user_id, score_mapper(score)) for user_id, score in participants]
             if score:
                 try:
                     score = score_mapper(float(score))
@@ -125,6 +225,9 @@ def leaderboard():
         traceback.print_exc()
         return redirect(url_for('error', error_message=ex))
 
+###################
+# final leaderboard
+###################
 
 @app.route('/fleaderboard', methods=["GET"])
 def fleaderboard():
