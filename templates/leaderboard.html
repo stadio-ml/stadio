@@ -11,10 +11,10 @@
             <a href="/submissions" class="btn btn-primary">Check submissions</a>
 
             {% if is_closed %}
-{#                <a href="/fleaderboard" class="btn btn-info">Final leaderboard</a>#}
+                {#                <a href="/fleaderboard" class="btn btn-info">Final leaderboard</a>#}
                 <div class="alert alert-warning mt-2">
-                        The competition is now CLOSED.
-                    </div>
+                    The competition is now CLOSED.
+                </div>
             {% else %}
                 <div class="alert alert-info mt-2">
                     <strong>Deadline (UTC Time):</strong> {{ close_time }}
@@ -26,6 +26,10 @@
             <div class="alert alert-success mt-3" role="alert">
                 The score for your current submission is: {{ score }}
             </div>
+            <div class="alert alert-warning mt-3" role="alert"> You have <strong>{{ left }}</strong>
+                submissions left!
+            </div>
+
         {% endif %}
     </div>
     <table class="table table-striped">

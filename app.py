@@ -31,7 +31,6 @@ competition_tools.schedule_db_dump(app.config['CLOSE_TIME'], db, stage_name="CLO
 
 competition_tools.schedule_db_dump(app.config['TERMINATE_TIME'], db, stage_name="TERMINATE", dump_out=app.config['DUMP_FOLDER'])
 
-
 def get_user_id(api_key):
     if not api_auth.is_valid(api_key):
         # TODO build dictionary of possible errors & avoid hardcoding strings
@@ -144,11 +143,17 @@ def submissions():
             print(user_submissions)
             user_submissions = [(s_id, timestamp, user_id, competition_tools.score_mapper(score), check)
                                 for s_id, timestamp, user_id, score, check in user_submissions]
+
+            submissions_left = int(
+                app.config['MAX_NUMBER_SUBMISSIONS'] - competition_tools.get_user_submissions_number(user_id=user_id,
+                                                                                                     db=db))
+
             return render_template("submissions.html",
                                    submissions_request_id=session["submissions_request_id"],
                                    user_id=user_id,
                                    user_submissions=user_submissions,
-                                   is_closed=stage_handler.is_closed())
+                                   is_closed=stage_handler.is_closed(),
+                                   left=submissions_left)
 
         except Exception as ex:
             traceback.print_stack()
@@ -194,6 +199,8 @@ def leaderboard():
                     score = competition_tools.score_mapper(float(score))
                 except: # Just in case someone passes something nasty for `score`
                     score = None
+
+            left = request.args.get("left", None)
             return render_template("leaderboard.html",
                                    name=app.config["NAME"],
                                    score=score,
@@ -201,7 +208,8 @@ def leaderboard():
                                    participants=participants,
                                    can_submit=True,
                                    close_time=stage_handler.close_time,
-                                   is_closed=stage_handler.is_closed())
+                                   is_closed=stage_handler.is_closed(),
+                                   left=left)
 
     except Exception as ex:
         traceback.print_stack()
@@ -312,13 +320,18 @@ def evaluate():
                     return redirect(
                         url_for("show_evaluate_score", pub_score=public_score, priv_score=private_score, baseline=1))
                 else:
-                    return redirect(url_for('leaderboard', score=public_score, highlight=user_id))
+                    submissions_left = int(app.config['MAX_NUMBER_SUBMISSIONS'] - competition_tools.get_user_submissions_number(user_id=user_id, db=db))
+
+                    return redirect(url_for('leaderboard',
+                                            score=public_score,
+                                            highlight=user_id,
+                                            left=submissions_left
+                                            ))
 
     except Exception as ex:
         traceback.print_stack()
         traceback.print_exc()
         return redirect(url_for('error', error_message=ex))
-
 
 ################
 # Upload
@@ -346,11 +359,17 @@ def upload():
             if request.method == 'POST':
                 latest_submission = db.session.query(func.max(Submission.timestamp)).filter(Submission.user_id == user_id).first()[0]
                 now = datetime.utcnow()
-                if (user_id not in [app.config['ADMIN_USER_ID'], app.config['BASELINE_USER_ID']]) and \
-                        latest_submission and \
-                        (now - latest_submission).total_seconds() < app.config['TIME_BETWEEN_SUBMISSIONS']:
-                    delta = max(5, int(app.config['TIME_BETWEEN_SUBMISSIONS'] - (now - latest_submission).total_seconds())) # avoid messages such as "try again in 0/1/2 seconds" (TODO remove magic number 5)
-                    raise Exception(f"You are exceeding the {app.config['TIME_BETWEEN_SUBMISSIONS']} seconds limit between submissions. Please try again in {delta} seconds")
+
+                if user_id not in [app.config['ADMIN_USER_ID'], app.config['BASELINE_USER_ID']]:
+
+                    if latest_submission and (now - latest_submission).total_seconds() < app.config['TIME_BETWEEN_SUBMISSIONS']:
+                        delta = max(5, int(app.config['TIME_BETWEEN_SUBMISSIONS'] - (now - latest_submission).total_seconds())) # avoid messages such as "try again in 0/1/2 seconds" (TODO remove magic number 5)
+                        raise Exception(f"You are exceeding the {app.config['TIME_BETWEEN_SUBMISSIONS']} seconds limit between submissions. Please try again in {delta} seconds")
+
+                    n_submissions = competition_tools.get_user_submissions_number(user_id=user_id, db=db)
+                    if n_submissions >= app.config['MAX_NUMBER_SUBMISSIONS']:
+                        raise Exception(f"You are exceeding the max submissions limit of {app.config['MAX_NUMBER_SUBMISSIONS']}. "
+                                        f"You are no more allowed to submit any solution.")
 
                 # check if the post request has the file part
                 if 'submittedSolutionFile' not in request.files:
