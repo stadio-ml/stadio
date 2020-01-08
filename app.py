@@ -93,7 +93,7 @@ def update_submissions():
         with_success=True
         user_evals = db.session.query(Evaluation).join(Submission).filter_by(user_id=user_id).all()
 
-        if len(user_evals) > 2:
+        if len(checked_submission_ids) > 2:
             raise Exception(f"Only two submissions can be selected for the final evaluation. You selected {len(user_evals)}.")
 
         print("user_evals:", user_evals)
@@ -104,12 +104,14 @@ def update_submissions():
                 e.private_check = True
 
         db.session.commit()
+        return render_template("update_submissions.html", with_success=with_success)
 
     except Exception as ex:
         with_success = False
         db.session.rollback()
-
-    return render_template("update_submissions.html", with_success=with_success)
+        traceback.print_stack()
+        traceback.print_exc()
+        return render_template("update_submissions.html", with_success=with_success, ex=str(ex))
 
 ################
 # submissions
@@ -248,14 +250,41 @@ def fleaderboard():
             not stage_handler.is_closed():
         return redirect(url_for("leaderboard"))
 
-    participants = db.session \
+    participants = []
+
+    # Get the max private score corresponding for the peope that have selected aty least one solution
+    participants_select = db.session \
         .query(Submission.user_id, func.max(Evaluation.evaluation_private)) \
         .join(Submission) \
-        .filter(Submission.timestamp < stage_handler.close_time) \
+        .filter(Submission.timestamp < stage_handler.close_time, Evaluation.private_check.is_(True)) \
         .group_by(Submission.user_id) \
         .order_by(Evaluation.evaluation_private.desc()) \
         .all()
 
+    print("participants_select:", participants_select)
+    participants += participants_select
+
+    # Get the people that did not select any solutions sorted by user_id, evaluation_public and timestamp
+    participants_not_select = db.session \
+        .query(Submission.user_id, Evaluation.evaluation_public, Evaluation.evaluation_private) \
+        .join(Submission) \
+        .filter(Submission.timestamp < stage_handler.close_time,
+                Submission.user_id.notin_([u_id for u_id, _ in participants_select])) \
+        .order_by(Submission.user_id.desc(), Evaluation.evaluation_public.desc(), Submission.timestamp.desc()) \
+        .all()
+
+    print("participants_not_select:", participants_not_select)
+
+    # Get the private score corresponding to the max public score for the people that did not select any solutions
+    # Since data is sorted desc, the first entry for each user is the score to take
+    u_placeholder = set()
+    for pns in participants_not_select:
+        if pns[0] not in u_placeholder:
+            participants.append((pns[0], pns[2]))
+        u_placeholder.add(pns[0])
+
+    # Sort the scores
+    participants = sorted(participants, key=lambda x: x[1], reverse=True)
     participants = [(user_id, score_mapper(score)) for user_id, score in participants]
 
     return render_template("leaderboard.html", participants=participants, can_submit=False)
