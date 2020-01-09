@@ -10,7 +10,7 @@ from sqlalchemy import inspect, func
 
 import numpy as np
 
-from models import Submission
+from models import Submission, Evaluation
 
 ALLOWED_EXTENSIONS = {'.csv'}
 
@@ -28,7 +28,8 @@ score_mapper = lambda score: f"{score :.3f}"
 
 def get_user_submissions_number(user_id, db):
     submission_count = db.session \
-        .query(func.count(Submission.id)) \
+        .query(func.count(Evaluation.submission_id)) \
+        .join(Submission)\
         .filter(Submission.user_id.is_(user_id)).scalar()
     return submission_count
 
