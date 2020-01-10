@@ -6,9 +6,11 @@ import pandas as pd
 import os
 from enum import Enum
 from evaluation_functions import evaluator
-from sqlalchemy import inspect
+from sqlalchemy import inspect, func
 
 import numpy as np
+
+from models import Submission, Evaluation
 
 ALLOWED_EXTENSIONS = {'.csv'}
 
@@ -18,6 +20,18 @@ PUBLIC = "Public"
 
 HEADER = [INDEX, TARGET]
 SOLUTION_HEADER = [INDEX, TARGET, PUBLIC]
+
+# function that maps db-stored score to printable value
+# TODO: move somewhere appropriate
+score_mapper = lambda score: f"{score :.3f}"
+
+
+def get_user_submissions_number(user_id, db):
+    submission_count = db.session \
+        .query(func.count(Evaluation.submission_id)) \
+        .join(Submission)\
+        .filter(Submission.user_id.is_(user_id)).scalar()
+    return submission_count
 
 
 def check_solution_file(solution_file):
