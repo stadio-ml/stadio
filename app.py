@@ -38,6 +38,16 @@ def get_user_id(api_key):
     user_id = api_auth.get_user(api_key)
     return user_id
 
+
+
+###################
+# Student_dashboard
+###################
+@app.route('/student_dashboard/<string:student_id>', methods=["GET"])
+def student_dashboard(student_id=None):
+
+    return render_template("student_dashboard.html")
+
 ################
 # Error Handling
 ################
