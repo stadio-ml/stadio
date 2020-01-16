@@ -26,6 +26,59 @@ SOLUTION_HEADER = [INDEX, TARGET, PUBLIC]
 score_mapper = lambda score: f"{score :.3f}"
 
 
+def get_public_leaderboard(db):
+    participants = db.session \
+        .query(Submission.user_id, func.max(Evaluation.evaluation_public)) \
+        .join(Submission) \
+        .group_by(Submission.user_id) \
+        .order_by(Evaluation.evaluation_public.desc()) \
+        .all()
+
+    participants = [(user_id, score_mapper(score)) for user_id, score in participants]
+    return participants
+
+
+def get_private_leaderboard(db, stage_handler):
+    participants = []
+
+    # Get the max private score corresponding for the peope that have selected aty least one solution
+    participants_select = db.session \
+        .query(Submission.user_id, func.max(Evaluation.evaluation_private)) \
+        .join(Submission) \
+        .filter(Submission.timestamp < stage_handler.close_time, Evaluation.private_check.is_(True)) \
+        .group_by(Submission.user_id) \
+        .order_by(Evaluation.evaluation_private.desc()) \
+        .all()
+
+    print("participants_select:", participants_select)
+    participants += participants_select
+
+    # Get the people that did not select any solutions sorted by user_id, evaluation_public and timestamp
+    participants_not_select = db.session \
+        .query(Submission.user_id, Evaluation.evaluation_public, Evaluation.evaluation_private) \
+        .join(Submission) \
+        .filter(Submission.timestamp < stage_handler.close_time,
+                Submission.user_id.notin_([u_id for u_id, _ in participants_select])) \
+        .order_by(Submission.user_id.desc(), Evaluation.evaluation_public.desc(), Submission.timestamp.desc()) \
+        .all()
+
+    print("participants_not_select:", participants_not_select)
+
+    # Get the private score corresponding to the max public score for the people that did not select any solutions
+    # Since data is sorted desc, the first entry for each user is the score to take
+    u_placeholder = set()
+    for pns in participants_not_select:
+        if pns[0] not in u_placeholder:
+            participants.append((pns[0], pns[2]))
+        u_placeholder.add(pns[0])
+
+    # Sort the scores
+    participants = sorted(participants, key=lambda x: x[1], reverse=True)
+    participants = [(user_id, score_mapper(score)) for user_id, score in participants]
+
+    return participants
+
+
 def get_user_submissions_number(user_id, db):
     submission_count = db.session \
         .query(func.count(Evaluation.submission_id)) \

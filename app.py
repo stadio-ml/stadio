@@ -12,6 +12,8 @@ from competition_tools import eval_public_private, StageHandler
 from sqlalchemy import func
 from datetime import datetime
 
+import pandas as pd
+
 app = Flask(__name__, static_url_path="", static_folder="static")
 app.config.from_object("config.CompetitionConfig")
 app.secret_key = os.urandom(24)
@@ -43,10 +45,25 @@ def get_user_id(api_key):
 ###################
 # Student_dashboard
 ###################
-@app.route('/student_dashboard/<string:student_id>', methods=["GET"])
-def student_dashboard(student_id=None):
+@app.route('/student_dashboard', methods=["GET"])
+@app.route('/student_dashboard/<string:user_id>', methods=["GET"])
+def student_dashboard(user_id=None):
 
-    return render_template("student_dashboard.html")
+    pub_leader = competition_tools.get_public_leaderboard(db)
+    priv_leader = competition_tools.get_private_leaderboard(db, stage_handler)
+
+    pub_leader_df = pd.DataFrame(pub_leader).rename({0: "user_id", 1: "public"}, axis=1)
+    priv_leader_df = pd.DataFrame(priv_leader).rename({0: "user_id", 1: "private"}, axis=1)
+
+    pub_priv_leader_df = pd.merge(pub_leader_df, priv_leader_df, on="user_id", validate="one_to_one")
+
+
+    if user_id is None:
+        return render_template("student_dashboard.html", leaderboard=pub_priv_leader_df.to_json(orient="index"))
+
+    else:
+        # compute KPI
+        return render_template("student_dashboard.html", leaderboard=pub_priv_leader_df.to_json(orient="index"))
 
 ################
 # Error Handling
