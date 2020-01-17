@@ -14,11 +14,13 @@
     </div>
 
     {% if user_id %}
+
+
+        <h3><i class="fa fa-user"></i> User {{ user_id }} - submissions</h3>
+        <hr>
         <div class="alert alert-warning mt-3" role="alert"> You have <strong>{{ left }}</strong>
                 submissions left!
         </div>
-        <hr>
-        <h3>{{ user_id }} submissions</h3>
 
         {% if not is_closed %}
             <form action="/update_submissions" method="POST">

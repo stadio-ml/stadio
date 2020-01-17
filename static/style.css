@@ -44,8 +44,8 @@ ul.student-details {
 }
 
 .card-counter:hover {
-    box-shadow: 4px 4px 20px #DADADA;
-    transition: .3s linear all;
+    box-shadow: 2px 2px 10px #666666!important;
+    transition: .2s linear all;
 }
 
 .card-counter.primary {

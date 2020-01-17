@@ -231,10 +231,12 @@ def submissions():
                        Evaluation.private_check) \
                 .join(Submission) \
                 .filter_by(user_id=user_id) \
+                .order_by(Evaluation.evaluation_public.desc())\
                 .all()
             print(user_submissions)
-            user_submissions = [(s_id, timestamp, user_id, competition_tools.score_mapper(score), check)
-                                for s_id, timestamp, user_id, score, check in user_submissions]
+            user_submissions = [(s_id, user_id, timestamp.strftime("%m/%d/%Y, %H:%M:%S"), competition_tools.score_mapper(score), check)
+                                for s_id, user_id, timestamp, score, check in user_submissions]
+
 
             submissions_left = int(
                 app.config['MAX_NUMBER_SUBMISSIONS'] - competition_tools.get_user_submissions_number(user_id=user_id,

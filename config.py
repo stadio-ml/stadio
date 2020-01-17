@@ -15,7 +15,7 @@ class CompetitionConfig:
 
     TEST_FILE_PATH = './static/test_solution/test_solution.csv'  # './static/test_solution/eval_solution.csv'
     MAX_FILE_SIZE = 32 * 1024 * 1024  # limit upload file size to 32MB
-    API_FILE = 'mappings.dummy.json'  # API mappings
+    API_FILE = '/Users/francescoventura/OneDrive - Politecnico di Torino/didattica/Data-Science-Lab/mappings.checkpoint.2019.2020.json' #'mappings.dummy.json'  # API mappings
     DB_FILE = 'sqlite:///competition.lab9.db'
     TIME_BETWEEN_SUBMISSIONS = 5 * 60  # 5 minutes between submissions
-    MAX_NUMBER_SUBMISSIONS = 100
+    MAX_NUMBER_SUBMISSIONS = 200

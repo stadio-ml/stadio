@@ -8,7 +8,7 @@
             <div class="col-lg-3">
                 <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
 
-                    <div class="card">
+                    <div class="card shadow">
                         {#                        <div class="card-body">#}
 
                         <div class="table table-hover tableFixHead studentDashTable">
@@ -154,7 +154,7 @@
             var user_sub_freq = [];
             user_sub_freq = {{ user_scores_sub_freq | safe}};
 
-            var keys = Object.keys(user_sub_freq).sort();
+            var keys = Object.keys(user_sub_freq).sort((a, b) => a - b);
 
             var count = keys.map(x => user_sub_freq[x]["count"]);
             var times = keys.map(x => new Date(user_sub_freq[x]["timestamp"]));
@@ -175,7 +175,7 @@
             var user_scores = [];
             user_scores = {{user_scores | safe}};
 
-            var keys = Object.keys(user_scores).sort();
+            var keys = Object.keys(user_scores).sort((a, b) => a - b);
 
             var pub_scores = keys.map(x => parseFloat(user_scores[x]["public"]));
             var priv_scores = keys.map(x => parseFloat(user_scores[x]["private"]));
