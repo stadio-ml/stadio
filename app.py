@@ -14,6 +14,7 @@ from datetime import datetime
 
 import pandas as pd
 import numpy as np
+from scipy.stats import trim_mean
 
 app = Flask(__name__, static_url_path="", static_folder="static")
 app.config.from_object("config.CompetitionConfig")
@@ -60,7 +61,7 @@ def student_dashboard(user_id=None):
 
 
     if user_id is None:
-        return render_template("student_dashboard.html", leaderboard=pub_priv_leader_df.to_dict(orient="index"),
+        return render_template("student_dashboard.html", user_id = user_id, leaderboard=pub_priv_leader_df.to_dict(orient="index"),
                                selected_user_id=user_id)
 
     else:
@@ -68,8 +69,10 @@ def student_dashboard(user_id=None):
             if user_id not in pub_priv_leader_df["user_id"].values:
                 raise Exception(f"User {user_id} not found.")
 
-            pub_position = np.where(pub_priv_leader_df.sort_values(["public"], ascending=False)["user_id"].values == user_id)[0] + 1
-            priv_position = np.where(pub_priv_leader_df.sort_values(["private"], ascending=False)["user_id"].values == user_id)[0] + 1
+            pub_position = np.where(pub_priv_leader_df.sort_values(["public"], ascending=False)["user_id"].values == user_id)[0][0] + 1
+            priv_position = np.where(pub_priv_leader_df.sort_values(["private"], ascending=False)["user_id"].values == user_id)[0][0] + 1
+
+            priv_score_on_leaderboard = pub_priv_leader_df.loc[pub_position-1, "private"]
 
             user_scores = competition_tools.get_user_scores(db, user_id)
 
@@ -77,25 +80,47 @@ def student_dashboard(user_id=None):
             user_scores["public"] = user_scores["public"].astype(float)
             user_scores["private"] = user_scores["private"].astype(float)
 
+            user_scores = user_scores.replace([np.inf, -np.inf], np.nan)
+
+            #print(user_scores)
+
             n_submissions = len(user_scores)
 
-            avg_public = user_scores["public"].mean()
-            std_public = user_scores["public"].std()
+            max_public = competition_tools.score_mapper(user_scores["public"].max())
+            avg_public = competition_tools.score_mapper(trim_mean(user_scores["public"], 0.1))
+            std_public = competition_tools.score_mapper(user_scores["public"].std())
 
-            avg_private = user_scores["private"].mean()
-            std_private = user_scores["private"].std()
+            max_private = competition_tools.score_mapper(user_scores["private"].max())
+            avg_private = competition_tools.score_mapper(trim_mean(user_scores["private"], 0.1))
+            std_private = competition_tools.score_mapper(user_scores["private"].std())
+
+            user_scores_sub_freq = user_scores.copy()
+            # user_scores_sub_freq["timestamp"] = pd.to_datetime(user_scores["timestamp"])
+            # print(user_scores_sub_freq)
+            # print(user_scores_sub_freq.dtypes)
+            user_scores_sub_freq = user_scores_sub_freq.groupby(pd.Grouper(key="timestamp", freq="1D"))\
+                .size().to_frame()\
+                .rename({0: "count"}, axis=1)\
+                .reset_index()
+
+            #print(user_scores_sub_freq)
 
             # compute KPI
-            return render_template("student_dashboard.html", leaderboard=pub_priv_leader_df.to_dict(orient="index"),
+            return render_template("student_dashboard.html", user_id = user_id,
+                                   leaderboard=pub_priv_leader_df.to_dict(orient="index"),
                                    selected_user_id=user_id,
                                    pub_position=pub_position,
                                    priv_position=priv_position,
+                                   priv_score_on_leaderboard=priv_score_on_leaderboard,
                                    n_submissions=n_submissions,
+                                   max_public=max_public,
                                    avg_public=avg_public,
                                    std_public=std_public,
+                                   max_private=max_private,
                                    avg_private=avg_private,
                                    std_private=std_private,
-                                   user_scores=user_scores.to_json(orient="index")
+                                   user_scores=user_scores.to_json(orient="index"),
+                                   user_scores_sub_freq = user_scores_sub_freq.to_json(orient="index")
                                    )
         except Exception as ex:
             traceback.print_stack()

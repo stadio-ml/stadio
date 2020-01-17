@@ -5,37 +5,39 @@
 
         <div class="row">
             <!-- Student dash table-->
-            <div class="col-lg-4">
+            <div class="col-lg-3">
                 <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
+
                     <div class="card">
-                        <div class="card-body">
-                            <div class="table table-hover tableFixHead studentDashTable">
-                                <table>
-                                    <thead class="thead-light">
-                                    <tr>
-                                        <th>#</th>
-                                        <th>User Id</th>
-                                        <th>Pub Sc</th>
-                                        <th>Priv Sc</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    {% for k, p in leaderboard.items() %}
-                                        {% if p["user_id"] == "baseline" %}
-                                            <tr class="table-secondary">
-                                                {% else %}
-                                            <tr>
-                                        {% endif %}
-                                    <td>{{ k }}</td>
-                                    <td>{{ p["user_id"] }}</td>
-                                    <td>{{ p["public"] }}</td>
-                                    <td>{{ p["private"] }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
+                        {#                        <div class="card-body">#}
+
+                        <div class="table table-hover tableFixHead studentDashTable">
+                            <table>
+                                <thead class="thead-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>UId</th>
+                                    <th>Pub S</th>
+                                    <th>Priv S</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for k, p in leaderboard.items() %}
+                                    {% if p["user_id"] == "baseline" %}
+                                        <tr class="table-secondary">
+                                            {% else %}
+                                        <tr onclick="window.location='/student_dashboard/{{ p["user_id"] }}';" class="{{ "table-primary" if user_id == p["user_id"] else ""}}">
+                                    {% endif %}
+                                <td>{{ k }}</td>
+                                <td>{{ p["user_id"] }}</td>
+                                <td>{{ p["public"] }}</td>
+                                <td>{{ p["private"] }}</td>
+                                </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
+                        {#                        </div>#}
                         {#            {{ leaderboard }}#}
 
                     </div>
@@ -43,7 +45,7 @@
             </div>
 
             <!-- Student dash details-->
-            <div class="col-lg-8">
+            <div class="col-lg-9">
                 <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
 
                     <h1><i class="fa fa-user"></i> User {{ selected_user_id }}</h1>
@@ -51,15 +53,16 @@
                 <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
                     <div class="col-sm">
                         <ul class="student-details">
-                            <li><strong>Public position: </strong> 10</li>
-                            <li><strong>Private position: </strong> 10</li>
+                            <li><strong>Public position: </strong> {{ pub_position }}</li>
+                            <li><strong>Private position: </strong> {{ priv_position }}</li>
                         </ul>
 
                     </div>
                     <div class="col-sm">
                         <ul class="student-details">
-                            <li><strong>Best public score: </strong> 1.0</li>
-                            <li><strong>Best private score: </strong> 1.0</li>
+                            <li><strong>Best public score: </strong> {{ max_public }}</li>
+                            <li><strong>Best private score: </strong>{{ max_private }}</li>
+                            <li><strong>Private score on final leaderboard: </strong>{{ priv_score_on_leaderboard }}</li>
                         </ul>
 
                     </div>
@@ -72,13 +75,13 @@
                             <div class="card-body">
                                 <h5 class="card-title"># Submissions</h5>
                                 <i class="fa fa-arrow-circle-up"></i>
-                                <span class="count-numbers">12</span>
+                                <span class="count-numbers">{{ n_submissions }}</span>
                                 <span class="count-name">Submit</span>
-                                <p class="card-text mt-3">
-                                    <small class="text-muted" style="color: #DADADA!important;">Last updated 3 mins
-                                        ago
-                                    </small>
-                                </p>
+                                {#                                <p class="card-text mt-3">#}
+                                {#                                    <small class="text-muted" style="color: #DADADA!important;">Last updated 3 mins#}
+                                {#                                        ago#}
+                                {#                                    </small>#}
+                                {#                                </p>#}
                             </div>
                         </div>
 
@@ -86,11 +89,11 @@
                             <div class="card-body">
                                 <h5 class="card-title">Avg Pub Score</h5>
                                 <i class="fa fa-bar-chart">&#xf080;</i>
-                                <span class="count-numbers">1.0</span>
+                                <span class="count-numbers">{{ avg_public }}</span>
                                 <span class="count-name">Pub<br>Score</span>
                                 <p class="card-text mt-3">
                                     <small class="text-muted" style="color: #DADADA!important;">Standard deviation =
-                                        0.1
+                                        {{ std_public }}
                                     </small>
                                 </p>
                             </div>
@@ -101,11 +104,11 @@
                                 <h5 class="card-title">Avg Priv Score</h5>
                                 <i class="fa fa-bar-chart">&#xf080;</i>
 
-                                <span class="count-numbers">1.0</span>
+                                <span class="count-numbers">{{ avg_private }}</span>
                                 <span class="count-name">Priv<br>Score</span>
                                 <p class="card-text mt-3">
                                     <small class="text-muted" style="color: #DADADA!important;">Standard deviation =
-                                        0.1
+                                        {{ std_private }}
                                     </small>
                                 </p>
 
@@ -119,7 +122,7 @@
 
                     <div class="card w-100 shadow">
                         <div class="card-body">
-                            <h5 class="card-title">Card title</h5>
+                            <h5 class="card-title">Number of submissions per day</h5>
                             <div id="submissions_trend">
                             </div>
                         </div>
@@ -131,7 +134,7 @@
 
                     <div class="card w-100 shadow">
                         <div class="card-body">
-                            <h5 class="card-title">Card title</h5>
+                            <h5 class="card-title">Submissions scores trend</h5>
                             <div id="submissions_scores">
                             </div>
                         </div>
@@ -145,21 +148,80 @@
     </div>
 
 
-    {{ user_scores }}
-
 
     <script>
-        var data = [
-            {
-                x: ['giraffes', 'orangutans', 'monkeys'],
-                y: [20, 14, 23],
-                type: 'bar'
-            }
-        ];
+        function p1() {
+            var user_sub_freq = [];
+            user_sub_freq = {{ user_scores_sub_freq | safe}};
 
-        Plotly.newPlot('submissions_trend', data);
+            var keys = Object.keys(user_sub_freq).sort();
 
-        Plotly.newPlot('submissions_scores', data);
+            var count = keys.map(x => user_sub_freq[x]["count"]);
+            var times = keys.map(x => new Date(user_sub_freq[x]["timestamp"]));
+
+            var trace1 = [
+                {
+                    x: times,
+                    y: count,
+                    type: 'bar',
+                    name: '# submissions'
+                }
+            ];
+
+            Plotly.newPlot('submissions_trend', trace1, {responsive: true});
+        }
+
+        function p2() {
+            var user_scores = [];
+            user_scores = {{user_scores | safe}};
+
+            var keys = Object.keys(user_scores).sort();
+
+            var pub_scores = keys.map(x => parseFloat(user_scores[x]["public"]));
+            var priv_scores = keys.map(x => parseFloat(user_scores[x]["private"]));
+            var times = keys.map(x => new Date(user_scores[x]["timestamp"]));
+
+            var trace1 = {
+                    x: times,
+                    y: pub_scores,
+                    type: 'bar',
+                    name: 'Public scores'
+                };
+
+            var trace2 =
+                {
+                    x: times,
+                    y: priv_scores,
+                    type: 'bar',
+                    name: 'Private scores'
+                };
+
+            var c = pub_scores.concat(priv_scores);
+            c = c.map(x => Math.abs(x));
+            c = c.sort((a, b) => a - b);
+            var idx = parseInt(0.9 * c.length) - 1;
+
+            var layout = {
+                barmode: 'group',
+                xaxis: {title: "Time"},
+                yaxis: {
+                    title: "Score",
+                    range: [-c[idx], c[idx]]
+                }
+
+            };
+
+            var data = [trace1, trace2];
+
+
+            Plotly.newPlot('submissions_scores', data, layout, {responsive: true});
+        }
+
+
+        p1();
+        p2();
+
+
     </script>
 
 {% endblock body %}
