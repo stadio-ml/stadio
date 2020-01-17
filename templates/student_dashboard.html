@@ -1,7 +1,165 @@
 {% extends 'dashboard_layout.html' %}
 
 {% block body %}
+    <div class="container-fluid">
 
-    {{ leaderboard }}
+        <div class="row">
+            <!-- Student dash table-->
+            <div class="col-lg-4">
+                <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table table-hover tableFixHead studentDashTable">
+                                <table>
+                                    <thead class="thead-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>User Id</th>
+                                        <th>Pub Sc</th>
+                                        <th>Priv Sc</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {% for k, p in leaderboard.items() %}
+                                        {% if p["user_id"] == "baseline" %}
+                                            <tr class="table-secondary">
+                                                {% else %}
+                                            <tr>
+                                        {% endif %}
+                                    <td>{{ k }}</td>
+                                    <td>{{ p["user_id"] }}</td>
+                                    <td>{{ p["public"] }}</td>
+                                    <td>{{ p["private"] }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        {#            {{ leaderboard }}#}
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Student dash details-->
+            <div class="col-lg-8">
+                <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
+
+                    <h1><i class="fa fa-user"></i> User {{ selected_user_id }}</h1>
+                </div>
+                <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
+                    <div class="col-sm">
+                        <ul class="student-details">
+                            <li><strong>Public position: </strong> 10</li>
+                            <li><strong>Private position: </strong> 10</li>
+                        </ul>
+
+                    </div>
+                    <div class="col-sm">
+                        <ul class="student-details">
+                            <li><strong>Best public score: </strong> 1.0</li>
+                            <li><strong>Best private score: </strong> 1.0</li>
+                        </ul>
+
+                    </div>
+                </div>
+
+                <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
+
+                    <div class="card-deck w-100 " style="margin: 0px auto;">
+                        <div class="card card-counter primary shadow">
+                            <div class="card-body">
+                                <h5 class="card-title"># Submissions</h5>
+                                <i class="fa fa-arrow-circle-up"></i>
+                                <span class="count-numbers">12</span>
+                                <span class="count-name">Submit</span>
+                                <p class="card-text mt-3">
+                                    <small class="text-muted" style="color: #DADADA!important;">Last updated 3 mins
+                                        ago
+                                    </small>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="card card-counter primary shadow">
+                            <div class="card-body">
+                                <h5 class="card-title">Avg Pub Score</h5>
+                                <i class="fa fa-bar-chart">&#xf080;</i>
+                                <span class="count-numbers">1.0</span>
+                                <span class="count-name">Pub<br>Score</span>
+                                <p class="card-text mt-3">
+                                    <small class="text-muted" style="color: #DADADA!important;">Standard deviation =
+                                        0.1
+                                    </small>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="card card-counter primary shadow">
+                            <div class="card-body">
+                                <h5 class="card-title">Avg Priv Score</h5>
+                                <i class="fa fa-bar-chart">&#xf080;</i>
+
+                                <span class="count-numbers">1.0</span>
+                                <span class="count-name">Priv<br>Score</span>
+                                <p class="card-text mt-3">
+                                    <small class="text-muted" style="color: #DADADA!important;">Standard deviation =
+                                        0.1
+                                    </small>
+                                </p>
+
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
+
+                    <div class="card w-100 shadow">
+                        <div class="card-body">
+                            <h5 class="card-title">Card title</h5>
+                            <div id="submissions_trend">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
+
+                    <div class="card w-100 shadow">
+                        <div class="card-body">
+                            <h5 class="card-title">Card title</h5>
+                            <div id="submissions_scores">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+
+    </div>
+
+
+    {{ user_scores }}
+
+
+    <script>
+        var data = [
+            {
+                x: ['giraffes', 'orangutans', 'monkeys'],
+                y: [20, 14, 23],
+                type: 'bar'
+            }
+        ];
+
+        Plotly.newPlot('submissions_trend', data);
+
+        Plotly.newPlot('submissions_scores', data);
+    </script>
 
 {% endblock body %}

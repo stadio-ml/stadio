@@ -26,6 +26,17 @@ SOLUTION_HEADER = [INDEX, TARGET, PUBLIC]
 score_mapper = lambda score: f"{score :.3f}"
 
 
+def get_user_scores(db, user_id):
+    participants = db.session \
+        .query(Submission.user_id, Submission.timestamp, Evaluation.evaluation_public, Evaluation.evaluation_private) \
+        .join(Submission) \
+        .filter(Submission.user_id == user_id)\
+        .order_by(Evaluation.evaluation_public.desc()) \
+        .all()
+
+    participants = [(user_id, time, score_mapper(pub_score), score_mapper(priv_score)) for user_id, time, pub_score, priv_score in participants]
+    return participants
+
 def get_public_leaderboard(db):
     participants = db.session \
         .query(Submission.user_id, func.max(Evaluation.evaluation_public)) \
@@ -50,7 +61,6 @@ def get_private_leaderboard(db, stage_handler):
         .order_by(Evaluation.evaluation_private.desc()) \
         .all()
 
-    print("participants_select:", participants_select)
     participants += participants_select
 
     # Get the people that did not select any solutions sorted by user_id, evaluation_public and timestamp
@@ -61,9 +71,6 @@ def get_private_leaderboard(db, stage_handler):
                 Submission.user_id.notin_([u_id for u_id, _ in participants_select])) \
         .order_by(Submission.user_id.desc(), Evaluation.evaluation_public.desc(), Submission.timestamp.desc()) \
         .all()
-
-    print("participants_not_select:", participants_not_select)
-
     # Get the private score corresponding to the max public score for the people that did not select any solutions
     # Since data is sorted desc, the first entry for each user is the score to take
     u_placeholder = set()
@@ -249,3 +256,5 @@ class StageHandler:
     def can_submit(self):
         stage = self._get_stage()
         return stage == Stage.OPEN or stage == Stage.CLOSED
+
+

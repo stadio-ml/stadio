@@ -13,6 +13,7 @@ from sqlalchemy import func
 from datetime import datetime
 
 import pandas as pd
+import numpy as np
 
 app = Flask(__name__, static_url_path="", static_folder="static")
 app.config.from_object("config.CompetitionConfig")
@@ -59,11 +60,50 @@ def student_dashboard(user_id=None):
 
 
     if user_id is None:
-        return render_template("student_dashboard.html", leaderboard=pub_priv_leader_df.to_json(orient="index"))
+        return render_template("student_dashboard.html", leaderboard=pub_priv_leader_df.to_dict(orient="index"),
+                               selected_user_id=user_id)
 
     else:
-        # compute KPI
-        return render_template("student_dashboard.html", leaderboard=pub_priv_leader_df.to_json(orient="index"))
+        try:
+            if user_id not in pub_priv_leader_df["user_id"].values:
+                raise Exception(f"User {user_id} not found.")
+
+            pub_position = np.where(pub_priv_leader_df.sort_values(["public"], ascending=False)["user_id"].values == user_id)[0] + 1
+            priv_position = np.where(pub_priv_leader_df.sort_values(["private"], ascending=False)["user_id"].values == user_id)[0] + 1
+
+            user_scores = competition_tools.get_user_scores(db, user_id)
+
+            user_scores = pd.DataFrame(user_scores).rename({0: "user_id", 1: "timestamp", 2: "public", 3: "private"}, axis=1)
+            user_scores["public"] = user_scores["public"].astype(float)
+            user_scores["private"] = user_scores["private"].astype(float)
+
+            n_submissions = len(user_scores)
+
+            avg_public = user_scores["public"].mean()
+            std_public = user_scores["public"].std()
+
+            avg_private = user_scores["private"].mean()
+            std_private = user_scores["private"].std()
+
+            # compute KPI
+            return render_template("student_dashboard.html", leaderboard=pub_priv_leader_df.to_dict(orient="index"),
+                                   selected_user_id=user_id,
+                                   pub_position=pub_position,
+                                   priv_position=priv_position,
+                                   n_submissions=n_submissions,
+                                   avg_public=avg_public,
+                                   std_public=std_public,
+                                   avg_private=avg_private,
+                                   std_private=std_private,
+                                   user_scores=user_scores.to_json(orient="index")
+                                   )
+        except Exception as ex:
+            traceback.print_stack()
+            traceback.print_exc()
+            return redirect(url_for('error', error_message=ex))
+
+            # return render_template("student_dashboard.html", leaderboard=pub_priv_leader_df.to_dict(orient="index"),
+            #                        error=str(ex))
 
 ################
 # Error Handling
