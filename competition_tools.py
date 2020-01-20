@@ -7,6 +7,7 @@ import os
 from enum import Enum
 from evaluation_functions import evaluator
 from sqlalchemy import inspect, func
+from config import CompetitionConfig
 
 import numpy as np
 
@@ -85,6 +86,13 @@ def get_private_leaderboard(db, stage_handler):
 
     return participants
 
+def get_peruser_submissions_number(db):
+    peruser_submission_count = db.session \
+        .query(Submission.user_id, func.count(Submission.user_id)) \
+        .filter(Submission.user_id != CompetitionConfig.ADMIN_USER_ID) \
+        .group_by(Submission.user_id) \
+        .all()  # this result contains the baseline scores
+    return peruser_submission_count
 
 def get_user_submissions_number(user_id, db):
     submission_count = db.session \
@@ -93,6 +101,11 @@ def get_user_submissions_number(user_id, db):
         .filter(Submission.user_id.is_(user_id)).scalar()
     return submission_count
 
+def get_submissions_number(db):
+    submission_count = db.session \
+        .query(func.count(Evaluation.submission_id)) \
+        .scalar()
+    return submission_count
 
 def check_solution_file(solution_file):
     print(f"Checking solution file '{solution_file}'...")

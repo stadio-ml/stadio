@@ -8,9 +8,11 @@ import os
 import secrets
 from api_utils import ApiAuth
 from models import db, Submission, Evaluation
-from competition_tools import eval_public_private, StageHandler
+from competition_tools import eval_public_private, StageHandler, score_mapper
+from evaluation_functions import evaluator_name
 from sqlalchemy import func
 from datetime import datetime
+import json
 
 import pandas as pd
 import numpy as np
@@ -41,7 +43,6 @@ def get_user_id(api_key):
         raise Exception("Invalid API key!")
     user_id = api_auth.get_user(api_key)
     return user_id
-
 
 
 ###################
@@ -129,6 +130,55 @@ def student_dashboard(user_id=None):
 
             # return render_template("student_dashboard.html", leaderboard=pub_priv_leader_df.to_dict(orient="index"),
             #                        error=str(ex))
+
+@app.route('/general_dashboard', methods=["GET"])
+def general_dashboard():
+    try:
+        pub_leader = competition_tools.get_public_leaderboard(db)
+        priv_leader = competition_tools.get_private_leaderboard(db, stage_handler)
+        pub_leader_df = pd.DataFrame(pub_leader).rename({0: "user_id", 1: "public"}, axis=1)
+        priv_leader_df = pd.DataFrame(priv_leader).rename({0: "user_id", 1: "private"}, axis=1)
+        pub_priv_leader_df = pd.merge(pub_leader_df, priv_leader_df, on="user_id", validate="one_to_one")
+
+        pub_priv_leader_df.private = pub_priv_leader_df.private.astype(float)
+        pub_priv_leader_df.public = pub_priv_leader_df.public.astype(float)
+
+        # Here eventual -Inf values in the dataframe are omitted from statistics.
+        # TODO consider trimmed mean?
+        submission_info = dict(
+            last_update=datetime.now(),
+            count=competition_tools.get_submissions_number(db),
+            public_mean=score_mapper(pub_priv_leader_df.public.mean()),
+            public_std=score_mapper(pub_priv_leader_df.public.std()),
+            private_mean=score_mapper(pub_priv_leader_df.private.mean()),
+            private_std=score_mapper(pub_priv_leader_df.private.std())
+        )
+
+        competition_info = dict(
+            name=app.config['NAME'],
+            open_time=app.config['OPEN_TIME'],
+            close_time=app.config['CLOSE_TIME'],
+            evaluator_name=evaluator_name
+        )
+
+        peruser_submission_number = pd.DataFrame(competition_tools.get_peruser_submissions_number(db), columns=["user_id", "submission_count"])
+        peruser_info = pd.merge(peruser_submission_number, pub_priv_leader_df, on="user_id", validate="one_to_one")\
+            .set_index("user_id")
+
+        # get and filter baseline score to provide it separately
+        baseline_info = peruser_info.loc[app.config['BASELINE_USER_ID']]
+        peruser_info = peruser_info.loc[peruser_info.index != app.config['BASELINE_USER_ID']]
+
+        return render_template("general_dashboard.html",
+                               competition_info=competition_info,
+                               submission_info=submission_info,
+                               peruser_info=peruser_info.to_json(orient="index"),
+                               baseline_info=baseline_info.to_json(orient="index"))
+    
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for('error', error_message=ex))
 
 ################
 # Error Handling

@@ -4,42 +4,245 @@
 
          <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
 
-        <div class="card-deck">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Card title</h5>
-                    <p class="card-text">This is a longer card with supporting text below as a natural lead-in to
-                        additional
-                        content. This content is a little bit longer.</p>
+            <div class="card-deck w-100" style="margin: 0px auto;">
+                <div class="card card-counter shadow">
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><b>Name: </b>{{ competition_info.name }}</li>
+                            <li class="list-group-item">
+                                <b>Open: </b>{{ competition_info.open_time }}
+                                <b>Close: </b>{{ competition_info.close_time }}
+                            </li>
+                            <li class="list-group-item"><b>Evaluator: </b>{{ competition_info.evaluator_name }}</li>
+                          </ul>
+                    </div>
                 </div>
-            </div>
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Card title</h5>
-                    <p class="card-text">This card has supporting text below as a natural lead-in to additional
-                        content.</p>
+
+
+                <div class="card card-counter primary shadow">
+                    <div class="card-body">
+                        <h5 class="card-title"># Submissions</h5>
+                        <i class="fa fa-arrow-circle-up"></i>
+                        <span class="count-numbers">{{ submission_info.count }}</span>
+                        <!-- <span class="count-name">Submit</span> --> 
+                        <p class="card-text mt-3">
+                            <small class="text-muted" style="color: #DADADA!important;">Last update: {{ submission_info.last_update }}
+                            </small>
+                        </p>
+                    </div>
                 </div>
-            </div>
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Card title</h5>
-                    <p class="card-text">This is a wider card with supporting text below as a natural lead-in to
-                        additional
-                        content. This card has even longer content than the first to show that equal height action.</p>
+
+                <div class="card card-counter primary shadow">
+                    <div class="card-body">
+                        <h5 class="card-title">Avg Public Score</h5>
+                        <i class="fa fa-bar-chart">&#xf080;</i>
+                        <span class="count-numbers">{{ submission_info.public_mean }}</span>
+                        <!-- <span class="count-name">Pub<br>Score</span> -->
+                        <p class="card-text mt-3">
+                            <small class="text-muted" style="color: #DADADA!important;">Standard deviation = {{ submission_info.public_std }}
+                            </small>
+                        </p>
+                    </div>
                 </div>
+
+                <div class="card card-counter primary shadow">
+                    <div class="card-body">
+                        <h5 class="card-title">Avg Private Score</h5>
+                        <i class="fa fa-bar-chart">&#xf080;</i>
+
+                        <span class="count-numbers">{{ submission_info.private_mean }}</span>
+                        <!-- <span class="count-name">Priv<br>Score</span> -->
+                        <p class="card-text mt-3">
+                            <small class="text-muted" style="color: #DADADA!important;">Standard deviation =
+                                {{ submission_info.private_std }}
+                            </small>
+                        </p>
+
+                    </div>
+                </div>
+
             </div>
-        </div>
     </div>
 
 
     <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
-        <div class="card w-100">
-            <div class="card-body">
-                <h5 class="card-title">Card title</h5>
-                Plots here...
+        <div class="card-deck w-100 " style="margin: 0px auto;">
+            <div class="card card-counter">
+                <div class="card-body">
+                    <h5 class="card-title">Submission distribution</h5>
+                    <div id="plt_submission_distribution"></div>
+                </div>
             </div>
+
+            <div class="card card-counter">
+                <div class="card-body">
+                    <h5 class="card-title">Submission count vs. Private Score</h5>
+                    <div id="plt_submission_vs_pscore"></div>
+                </div>
+            </div>
+
         </div>
 
     </div>
+
+    <div class="d-md-flex flex-md-equal w-100 my-md-3 pl-md-3">
+        <div class="card-deck w-100 " style="margin: 0px auto;">
+            <div class="card card-counter">
+                <div class="card-body">
+                    <h5 class="card-title">Public and private score distributions</h5>
+                    <div id="plt_public_private_dist"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const peruser_info = {{ peruser_info | safe }}
+        const baseline_info = {{ baseline_info | safe }}
+        const outofdist_tr = 0.95
+
+        var items = Object.keys(peruser_info).map(key => {
+            subcount = parseInt(peruser_info[key]["submission_count"])
+            private_score = parseFloat(peruser_info[key]["private"])
+            public_score = parseFloat(peruser_info[key]["public"])
+            return [key, subcount, private_score, public_score];
+        });
+
+        // order by submission count
+        items = items.sort((first, second) => {
+            return second[1] - first[1];
+        });
+
+        // filter outliers on private scores
+        ab = items.sort((a, b) => Math.abs(a) - Math.abs(b));
+        var idx = parseInt(outofdist_tr * ab.length) - 1;
+        var ood_ids = ab.slice(idx).map(x => x[0])
+        items = items.filter(x => ! ood_ids.includes(x[0]))
+
+        user_id = items.map(x => x[0])
+        subcount = items.map(x => x[1])
+        private_score = items.map(x => x[2])
+        public_score = items.map(x => x[3])
+
+        // plotting
+        var trace1 = {
+            x: user_id,
+            y: subcount,
+            type: 'bar',
+            name: 'Submission count per user'
+        };
+
+        var layout1 = {
+            xaxis: {
+                title: "Student ID",
+                exponentformat: 'none',
+                type: 'category'
+            },
+            yaxis: {
+                title: "Count"
+            }
+        };
+
+        Plotly.newPlot('plt_submission_distribution', [trace1], layout1, {responsive: true});
+
+        var trace2 = {
+            x: subcount,
+            y: private_score,
+            type: 'scatter',
+            mode: 'markers',
+            text: user_id.map(ui => "Student ID: " + ui),
+            marker: {
+                size: 10
+            },
+            name: 'Submission count vs private score'
+        }
+
+        var layout2 = {
+            xaxis: {
+                title: "Submission count"
+            },
+            yaxis: {
+                title: "Private score"
+            }
+        };
+
+        Plotly.newPlot('plt_submission_vs_pscore', [trace2], layout2, {responsive: true})
+
+        var trace3 = {
+            x: private_score,
+            type: 'histogram',
+            name: 'Private distribution'
+        }
+
+        var trace4 = {
+            x: public_score,
+            type: 'histogram',
+            name: 'Public distribution'
+        }
+
+        var baseline_private = {
+            x: [baseline_info['private']],
+            y: [0],
+            text: [''],
+            name: 'Baseline private',
+            mode: 'line',
+            line: {
+                color: 'blue'
+            }
+        };
+
+        var baseline_public = {
+            x: [baseline_info['public']],
+            y: [0],
+            text: [''],
+            name: 'Baseline public',
+            mode: 'line',
+            line: {
+                color: 'orange'
+            }
+        };
+
+        var layout3 = {
+            xaxis: {
+                title: "Score"
+            },
+            yaxis: {
+                title: "Count"
+            },
+            shapes: [
+                {
+                    type: 'line',
+                    xref: 'x',
+                    yref: 'paper',
+                    x0: baseline_info['private'],
+                    x1: baseline_info['private'],
+                    y0: 0,
+                    y1: 1,
+                    line: {
+                        width: 3,
+                        color: 'blue'
+                    }
+                },
+                {
+                    type: 'line',
+                    xref: 'x',
+                    yref: 'paper',
+                    x0: baseline_info['public'],
+                    x1: baseline_info['public'],
+                    y0: 0,
+                    y1: 1,
+                    line: {
+                        width: 3,
+                        color: 'orange'
+                    }
+                }
+            ]
+        };
+        
+
+        Plotly.newPlot('plt_public_private_dist', [trace3, trace4, baseline_private, baseline_public], layout3, {responsive: true})
+
+
+    </script>
 
 {% endblock body %}
