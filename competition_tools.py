@@ -12,7 +12,7 @@ import numpy as np
 
 from models import Submission, Evaluation
 
-ALLOWED_EXTENSIONS = {'.csv'}
+ALLOWED_EXTENSIONS = {".csv"}
 
 INDEX = "Id"
 TARGET = "Predicted"
@@ -27,10 +27,12 @@ score_mapper = lambda score: f"{score :.3f}"
 
 
 def get_user_submissions_number(user_id, db):
-    submission_count = db.session \
-        .query(func.count(Evaluation.submission_id)) \
-        .join(Submission)\
-        .filter(Submission.user_id.is_(user_id)).scalar()
+    submission_count = (
+        db.session.query(func.count(Evaluation.submission_id))
+        .join(Submission)
+        .filter(Submission.user_id.is_(user_id))
+        .scalar()
+    )
     return submission_count
 
 
@@ -43,14 +45,20 @@ def check_solution_file(solution_file):
         if not (all([h in solution_columns for h in SOLUTION_HEADER]) == True):
             missing_cols = [h for h in SOLUTION_HEADER if h not in solution_columns]
             raise Exception(
-                f"Missing columns {missing_cols} in the solution file with columns {solution_columns}.")
+                f"Missing columns {missing_cols} in the solution file with columns {solution_columns}."
+            )
 
         if len(solution_columns) > len(SOLUTION_HEADER):
-            raise Exception(f"Too many columns - Expecting columns {SOLUTION_HEADER} in the solution file.")
+            raise Exception(
+                f"Too many columns - Expecting columns {SOLUTION_HEADER} in the solution file."
+            )
 
-        if (len(solution_df[PUBLIC].unique()) != 2) or\
-                (not all([(v in [0, 1]) for v in solution_df[PUBLIC].unique()])):
-            raise Exception(f"Public column should contains only 0 and 1 where:\n - 1 means public\n - 0 means private")
+        if (len(solution_df[PUBLIC].unique()) != 2) or (
+            not all([(v in [0, 1]) for v in solution_df[PUBLIC].unique()])
+        ):
+            raise Exception(
+                f"Public column should contains only 0 and 1 where:\n - 1 means public\n - 0 means private"
+            )
 
     except Exception as ex:
         raise Exception(f"Test solution error - File: {solution_file} - {ex}")
@@ -66,18 +74,26 @@ def check_file(file, test_file):
         raise Exception(f"Test solution error - File: {test_file} - {ex}")
 
     submitted_df = pd.read_csv(file.stream, index_col=INDEX)
-    submitted_columns = list(submitted_df.columns) + [INDEX] # "INDEX" is not included in .columns
+    submitted_columns = list(submitted_df.columns) + [
+        INDEX
+    ]  # "INDEX" is not included in .columns
     # check file schema
     if not (all([h in submitted_columns for h in HEADER]) == True):
         missing_cols = [h for h in HEADER if h not in submitted_columns]
-        raise Exception(f"Missing columns {missing_cols} in the submitted solution with columns {submitted_columns}.")
+        raise Exception(
+            f"Missing columns {missing_cols} in the submitted solution with columns {submitted_columns}."
+        )
 
     if len(submitted_columns) > len(HEADER):
-        raise Exception(f"Too many columns - Expecting columns {HEADER} in submitted solution.")
+        raise Exception(
+            f"Too many columns - Expecting columns {HEADER} in submitted solution."
+        )
 
     # check file len
     if len(submitted_df.index) != len(test_df.index):
-        raise Exception(f"Submitted solution length does not match the dataset length. Submitted solution has {len(submitted_df.index)} rows while Dataset has {len(test_df.index)} rows.")
+        raise Exception(
+            f"Submitted solution length does not match the dataset length. Submitted solution has {len(submitted_df.index)} rows while Dataset has {len(test_df.index)} rows."
+        )
 
     # TODO: check file size
 
@@ -87,12 +103,15 @@ def check_file(file, test_file):
 
     return True
 
+
 def eval_public_private(submission, solution):
     try:
         df_pred = pd.read_csv(submission, index_col=INDEX).sort_index()
         df_true = pd.read_csv(solution, index_col=INDEX).sort_index()
-        assert len(df_pred) == len(df_true) # already checked, should be true!x
-        assert (df_pred.index == df_true.index).all() # already checked, should be true!
+        assert len(df_pred) == len(df_true)  # already checked, should be true!x
+        assert (
+            df_pred.index == df_true.index
+        ).all()  # already checked, should be true!
     except Exception:
         # We shuld never fail here -- the file has already been validated!
         raise Exception("Unexpected error! Please contact an administrator")
@@ -109,10 +128,13 @@ def eval_public_private(submission, solution):
 
     return public_score, private_score
 
+
 def allowed_file(filename):
 
     if not os.path.splitext(filename.lower())[1] in ALLOWED_EXTENSIONS:
-        error_message = f'Unsupported file format. Allowed file formats are {ALLOWED_EXTENSIONS}'
+        error_message = (
+            f"Unsupported file format. Allowed file formats are {ALLOWED_EXTENSIONS}"
+        )
         raise Exception(error_message)
 
     return True
@@ -139,20 +161,26 @@ def schedule_db_dump(sched_time, db, stage_name, dump_out):
         inspector = inspect(db.engine)
 
         for t_name in inspector.get_table_names():
-            dest_path = os.path.join(dump_out, f"{t_name}_{stage_name}_{dump_time}_dump.csv")
+            dest_path = os.path.join(
+                dump_out, f"{t_name}_{stage_name}_{dump_time}_dump.csv"
+            )
 
             print(f"Loading table '{t_name}'...")
             t_df = pd.read_sql_table(t_name, con=db.engine)
 
             print(f"Dumping {t_name} to {dest_path}")
             t_df.to_csv(dest_path, index=False)
+
     if delay > 0:
-        threading\
-            .Timer(delay, dumb_db_dump, kwargs={"db": db, "stage_name": stage_name, "dump_out": dump_out})\
-            .start()
+        threading.Timer(
+            delay,
+            dumb_db_dump,
+            kwargs={"db": db, "stage_name": stage_name, "dump_out": dump_out},
+        ).start()
         print(f"Scheduled DB dump in {delay} seconds for stage {stage_name}.")
     else:
         print("DB dump not scheduled. Negative delay!")
+
 
 class Stage(Enum):
     READY = 0
@@ -165,10 +193,12 @@ class StageHandler:
     def __init__(self, open_time, close_time, terminate_time):
         self.open_time = datetime.datetime.strptime(open_time, "%Y/%m/%d %H:%M:%S")
         self.close_time = datetime.datetime.strptime(close_time, "%Y/%m/%d %H:%M:%S")
-        self.terminate_time = datetime.datetime.strptime(terminate_time, "%Y/%m/%d %H:%M:%S")
+        self.terminate_time = datetime.datetime.strptime(
+            terminate_time, "%Y/%m/%d %H:%M:%S"
+        )
 
         if self.close_time > self.terminate_time or self.open_time > self.close_time:
-            raise RuntimeError('Competition dates order is wrong!')
+            raise RuntimeError("Competition dates order is wrong!")
 
     def _get_stage(self):
         now = datetime.datetime.utcnow()
