@@ -1,6 +1,12 @@
+# environments and IDEs
 .vscode
 venv
 __pycache__
+
+# databases
 *.db
 uploads/*
 .DS_Store
+
+# logging files
+*.log

@@ -34,9 +34,13 @@ if __name__ == "__main__":
             "log.screen": True,
             "log.access_file": "access.log",
             "log.error_file": "error.log",
+            "server.shutdown_timeout": 1,
         }
     )
 
-    # Start the CherryPy WSGI web server
-    cherrypy.engine.start()
-    cherrypy.engine.block()
+    try:
+        # Start the CherryPy WSGI web server
+        cherrypy.engine.start()
+        cherrypy.engine.block()
+    except KeyboardInterrupt:
+        cherrypy.engine.exit()
