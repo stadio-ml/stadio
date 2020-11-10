@@ -58,12 +58,12 @@ def get_user_id(api_key):
 # Error Handling
 ################
 @app.errorhandler(413)
-def request_entity_too_large(error):
+def error_handler_413(error):
     return render_template("error.html", error_message=str(error)), 413
 
 
 @app.errorhandler(404)
-def request_entity_too_large(error):
+def error_handler_404(error):
     return render_template("error.html", error_message=str(error)), 404
 
 
