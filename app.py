@@ -47,7 +47,7 @@ competition_tools.schedule_db_dump(
 
 
 def get_user_id(api_key):
-    if not api_auth.is_valid(api_key):
+    if not api_auth.is_valid_key(api_key):
         # TODO build dictionary of possible errors & avoid hardcoding strings
         raise Exception("Invalid API key!")
     user_id = api_auth.get_user(api_key)
@@ -78,7 +78,7 @@ def error():
 ####################
 @app.route("/update_submissions", methods=["POST"])
 def update_submissions():
-    if not api_auth.is_valid(session["api_key"]):
+    if not api_auth.is_valid_key(session["api_key"]):
         raise Exception("Invalid API key!")
 
     user_id = api_auth.get_user(session["api_key"])
@@ -155,7 +155,7 @@ def submissions():
             ):
                 error_message = "Wrong request. Use the form web page to upload a solution or try to reload the page!"
                 raise Exception(error_message)
-            if not api_auth.is_valid(api_key):
+            if not api_auth.is_valid_key(api_key):
                 raise Exception("Invalid API key!")
 
             session["api_key"] = api_key
