@@ -10,7 +10,7 @@ class CompetitionConfig:
     TERMINATE_TIME = '2020/12/02 11:27:00'
 
     # USERS with special behaviours
-    ADMIN_USER_ID = "prof"
+    ADMIN_USER_ID = "admin"
     BASELINE_USER_ID = "baseline"
 
     # BASE directory where you might want to store all the completition data
