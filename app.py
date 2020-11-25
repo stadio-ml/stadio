@@ -12,7 +12,6 @@ from competition_tools import eval_public_private, StageHandler, score_mapper
 from evaluation_functions import evaluator_name
 from sqlalchemy import func
 from datetime import datetime
-import json
 
 import pandas as pd
 import numpy as np
@@ -24,21 +23,35 @@ app.secret_key = os.urandom(24)
 
 CORS(app)
 
-stage_handler = StageHandler(app.config['OPEN_TIME'], app.config['CLOSE_TIME'], app.config['TERMINATE_TIME'])
-api_auth = ApiAuth(app.config['API_FILE'])
-app.config["SQLALCHEMY_DATABASE_URI"] = app.config['DB_FILE']
+stage_handler = StageHandler(
+    app.config["OPEN_TIME"], app.config["CLOSE_TIME"], app.config["TERMINATE_TIME"]
+)
+api_auth = ApiAuth(app.config["API_FILE"])
+app.config["SQLALCHEMY_DATABASE_URI"] = app.config["DB_FILE"]
 db.init_app(app)
 db.app = app
 db.create_all()
 
-competition_tools.check_solution_file(app.config['TEST_FILE_PATH'])
+# Sanity checks
+competition_tools.check_solution_file(app.config["TEST_FILE_PATH"])
 
-competition_tools.schedule_db_dump(app.config['CLOSE_TIME'], db, stage_name="CLOSE", dump_out=app.config['DUMP_FOLDER'])
+# Scheduling database dumps
+competition_tools.schedule_db_dump(
+    app.config["CLOSE_TIME"],
+    db,
+    stage_name="CLOSE",
+    dump_out=app.config["DUMP_FOLDER"],
+)
+competition_tools.schedule_db_dump(
+    app.config["TERMINATE_TIME"],
+    db,
+    stage_name="TERMINATE",
+    dump_out=app.config["DUMP_FOLDER"],
+)
 
-competition_tools.schedule_db_dump(app.config['TERMINATE_TIME'], db, stage_name="TERMINATE", dump_out=app.config['DUMP_FOLDER'])
 
 def get_user_id(api_key):
-    if not api_auth.is_valid(api_key):
+    if not api_auth.is_valid_key(api_key):
         # TODO build dictionary of possible errors & avoid hardcoding strings
         raise Exception("Invalid API key!")
     user_id = api_auth.get_user(api_key)
@@ -52,12 +65,28 @@ def get_user_id(api_key):
 @app.route('/student_dashboard/<string:user_id>', methods=["GET"])
 def student_dashboard(user_id=None):
 
+    api_key = request.args.get("api_key")
+    print(api_key)
+    try:
+        request_user_id = get_user_id(api_key)
+        print(request_user_id)
+        if request_user_id not in [app.config["ADMIN_USER_ID"]]:
+            return redirect(url_for("leaderboard"))
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for("error", error_message=ex))
+
     pub_leader = competition_tools.get_public_leaderboard(db)
     priv_leader = competition_tools.get_private_leaderboard(db, stage_handler)
+    print(pub_leader)
 
-    pub_leader_df = pd.DataFrame(pub_leader).rename({0: "user_id", 1: "public"}, axis=1)
-    priv_leader_df = pd.DataFrame(priv_leader).rename({0: "user_id", 1: "private"}, axis=1)
+    pub_leader_df = pd.DataFrame(pub_leader, columns=["user_id", "public"])
+    priv_leader_df = pd.DataFrame(priv_leader, columns=["user_id", "private"])
 
+    # TODO manage empty leaderboard
+    print(pub_leader_df.info())
+    print(priv_leader_df.info())
     pub_priv_leader_df = pd.merge(pub_leader_df, priv_leader_df, on="user_id", validate="one_to_one")
 
 
@@ -133,11 +162,23 @@ def student_dashboard(user_id=None):
 
 @app.route('/general_dashboard', methods=["GET"])
 def general_dashboard():
+    api_key = request.args.get("api_key")
+    print(api_key)
+    try:
+        request_user_id = get_user_id(api_key)
+        print(request_user_id)
+        if request_user_id not in [app.config["ADMIN_USER_ID"]]:
+            return redirect(url_for("leaderboard"))
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for("error", error_message=ex))
+
     try:
         pub_leader = competition_tools.get_public_leaderboard(db)
         priv_leader = competition_tools.get_private_leaderboard(db, stage_handler)
-        pub_leader_df = pd.DataFrame(pub_leader).rename({0: "user_id", 1: "public"}, axis=1)
-        priv_leader_df = pd.DataFrame(priv_leader).rename({0: "user_id", 1: "private"}, axis=1)
+        pub_leader_df = pd.DataFrame(pub_leader, columns=["user_id", "public"])
+        priv_leader_df = pd.DataFrame(priv_leader, columns=["user_id", "private"])
         pub_priv_leader_df = pd.merge(pub_leader_df, priv_leader_df, on="user_id", validate="one_to_one")
 
         pub_priv_leader_df.private = pub_priv_leader_df.private.astype(float)
@@ -166,14 +207,24 @@ def general_dashboard():
             .set_index("user_id")
 
         # get and filter baseline score to provide it separately
-        baseline_info = peruser_info.loc[app.config['BASELINE_USER_ID']]
-        peruser_info = peruser_info.loc[peruser_info.index != app.config['BASELINE_USER_ID']]
+        try:
+            baseline_info = peruser_info.loc[app.config['BASELINE_USER_ID']]
+        except Exception as ex:
+            print(ex)
+            baseline_info = None
+
+        try:
+            peruser_info = peruser_info.loc[peruser_info.index != app.config['BASELINE_USER_ID']]
+        except Exception as ex:
+            print(ex)
+            peruser_info = None
 
         return render_template("general_dashboard.html",
                                competition_info=competition_info,
                                submission_info=submission_info,
-                               peruser_info=peruser_info.to_json(orient="index"),
-                               baseline_info=baseline_info.to_json(orient="index"))
+                               peruser_info=peruser_info.to_json(orient="index") if peruser_info is not None else None,
+                               baseline_info=baseline_info.to_json(orient="index") if baseline_info is not None else None
+                               )
     
     except Exception as ex:
         traceback.print_stack()
@@ -184,27 +235,27 @@ def general_dashboard():
 # Error Handling
 ################
 @app.errorhandler(413)
-def request_entity_too_large(error):
-    return render_template('error.html', error_message=str(error)), 413
+def error_handler_413(error):
+    return render_template("error.html", error_message=str(error)), 413
 
 
 @app.errorhandler(404)
-def request_entity_too_large(error):
-    return render_template('error.html', error_message=str(error)), 404
+def error_handler_404(error):
+    return render_template("error.html", error_message=str(error)), 404
 
 
-@app.route('/error', methods=["GET"])
+@app.route("/error", methods=["GET"])
 def error():
     error_message = request.args["error_message"]
-    return render_template('error.html', error_message=str(error_message))
+    return render_template("error.html", error_message=str(error_message))
 
 
 ####################
 # update submissions
 ####################
-@app.route('/update_submissions', methods=["POST"])
+@app.route("/update_submissions", methods=["POST"])
 def update_submissions():
-    if not api_auth.is_valid(session["api_key"]):
+    if not api_auth.is_valid_key(session["api_key"]):
         raise Exception("Invalid API key!")
 
     user_id = api_auth.get_user(session["api_key"])
@@ -212,11 +263,18 @@ def update_submissions():
     print("checked_submission_ids:", checked_submission_ids)
 
     try:
-        with_success=True
-        user_evals = db.session.query(Evaluation).join(Submission).filter_by(user_id=user_id).all()
+        with_success = True
+        user_evals = (
+            db.session.query(Evaluation)
+            .join(Submission)
+            .filter_by(user_id=user_id)
+            .all()
+        )
 
         if len(checked_submission_ids) > 2:
-            raise Exception(f"Only two submissions can be selected for the final evaluation. You selected {len(user_evals)}.")
+            raise Exception(
+                f"Only two submissions can be selected for the final evaluation. You selected {len(user_evals)}."
+            )
 
         print("user_evals:", user_evals)
 
@@ -233,20 +291,27 @@ def update_submissions():
         db.session.rollback()
         traceback.print_stack()
         traceback.print_exc()
-        return render_template("update_submissions.html", with_success=with_success, ex=str(ex))
+        return render_template(
+            "update_submissions.html", with_success=with_success, ex=str(ex)
+        )
+
 
 ################
 # submissions
 ################
-@app.route('/submissions', methods=["GET", "POST"])
+@app.route("/submissions", methods=["GET", "POST"])
 def submissions():
     # TODO allow to admins the access
     if stage_handler.is_ready():
-        return render_template("ready.html", name=app.config['NAME'], open_time=stage_handler.open_time,
-                               close_time=stage_handler.close_time)
+        return render_template(
+            "ready.html",
+            name=app.config["NAME"],
+            open_time=stage_handler.open_time,
+            close_time=stage_handler.close_time,
+        )
 
     if stage_handler.is_terminated():
-        return render_template("over.html", name=app.config['NAME'])
+        return render_template("over.html", name=app.config["NAME"])
 
     # Get API key from submissions form and show submissions
     api_key = request.form.get("APIKey", None)
@@ -254,61 +319,75 @@ def submissions():
     if api_key is None:
         submissions_request_id = secrets.token_hex()
         session["submissions_request_id"] = submissions_request_id
-        return render_template("submissions.html",
-                               submissions_request_id=submissions_request_id,
-                               is_closed=stage_handler.is_closed())
+        return render_template(
+            "submissions.html",
+            submissions_request_id=submissions_request_id,
+            is_closed=stage_handler.is_closed(),
+        )
     else:
         try:
-            if ("submissions_request_id" not in session.keys()) or \
-                    (session["submissions_request_id"] != request.form.get('submissionsRequestId', None)):
+            if ("submissions_request_id" not in session.keys()) or (
+                session["submissions_request_id"]
+                != request.form.get("submissionsRequestId", None)
+            ):
                 error_message = "Wrong request. Use the form web page to upload a solution or try to reload the page!"
                 raise Exception(error_message)
-            if not api_auth.is_valid(api_key):
+            if not api_auth.is_valid_key(api_key):
                 raise Exception("Invalid API key!")
 
             session["api_key"] = api_key
             user_id = api_auth.get_user(api_key)
 
-            app.logger.info(f"Received request to check submissions page by user_id '{user_id}'.")
+            app.logger.info(
+                f"Received request to check submissions page by user_id '{user_id}'."
+            )
 
             Submission.query.filter_by(user_id=user_id).all()
 
-            user_submissions = db.session \
-                .query(Submission.id,
-                       Submission.user_id,
-                       Submission.timestamp,
-                       Evaluation.evaluation_public,
-                       Evaluation.private_check) \
-                .join(Submission) \
-                .filter_by(user_id=user_id) \
-                .order_by(Evaluation.evaluation_public.desc())\
+            user_submissions = (
+                db.session.query(
+                    Submission.id,
+                    Submission.user_id,
+                    Submission.timestamp,
+                    Evaluation.evaluation_public,
+                    Evaluation.private_check,
+                )
+                .join(Submission)
+                .filter_by(user_id=user_id)
                 .all()
+            )
             print(user_submissions)
-            user_submissions = [(s_id, user_id, timestamp.strftime("%m/%d/%Y, %H:%M:%S"), competition_tools.score_mapper(score), check)
-                                for s_id, user_id, timestamp, score, check in user_submissions]
-
+            user_submissions = [
+                (s_id, timestamp, user_id, competition_tools.score_mapper(score), check)
+                for s_id, timestamp, user_id, score, check in user_submissions
+            ]
 
             submissions_left = int(
-                app.config['MAX_NUMBER_SUBMISSIONS'] - competition_tools.get_user_submissions_number(user_id=user_id,
-                                                                                                     db=db))
+                app.config["MAX_NUMBER_SUBMISSIONS"]
+                - competition_tools.get_user_submissions_number(user_id=user_id, db=db)
+            )
 
-            return render_template("submissions.html",
-                                   submissions_request_id=session["submissions_request_id"],
-                                   user_id=user_id,
-                                   user_submissions=user_submissions,
-                                   is_closed=stage_handler.is_closed(),
-                                   left=submissions_left)
+            return render_template(
+                "submissions.html",
+                submissions_request_id=session["submissions_request_id"],
+                user_id=user_id,
+                user_submissions=user_submissions,
+                is_closed=stage_handler.is_closed(),
+                left=submissions_left,
+            )
 
         except Exception as ex:
             traceback.print_stack()
             traceback.print_exc()
-            return redirect(url_for('error', error_message=ex))
+            return redirect(url_for("error", error_message=ex))
+
 
 ################
 # leaderboard
 ################
 
-@app.route('/', methods=["GET"])
+
+@app.route("/", methods=["GET"])
 def leaderboard():
     try:
         # To allow access to admins even is competition is ready or over
@@ -316,55 +395,74 @@ def leaderboard():
         api_key = request.args.get("api_key", None)
         if api_key is not None:
             user_id = get_user_id(api_key)
-            app.logger.info(f"Received request to leaderboard page by user_id '{user_id}'.")
+            app.logger.info(
+                f"Received request to leaderboard page by user_id '{user_id}'."
+            )
 
-        if ((user_id is None) or (user_id not in [app.config['ADMIN_USER_ID']])) and \
-                stage_handler.is_ready():
-            return render_template("ready.html", name=app.config['NAME'], open_time=stage_handler.open_time, close_time=stage_handler.close_time)
-        elif ((user_id is None) or (user_id not in [app.config['ADMIN_USER_ID']])) and \
-                stage_handler.is_terminated():
-            return render_template("over.html", name=app.config['NAME'])
-        else: # Get the leaderboard
+        if (
+            (user_id is None) or (user_id not in [app.config["ADMIN_USER_ID"]])
+        ) and stage_handler.is_ready():
+            return render_template(
+                "ready.html",
+                name=app.config["NAME"],
+                open_time=stage_handler.open_time,
+                close_time=stage_handler.close_time,
+            )
+        elif (
+            (user_id is None) or (user_id not in [app.config["ADMIN_USER_ID"]])
+        ) and stage_handler.is_terminated():
+            return render_template("over.html", name=app.config["NAME"])
+        else:  # Get the leaderboard
             # TODO: here, we assume that a higher score is preferable.
             # it might not always be like this (e.g. MSE)
             # For those cases, func.min should be used: make this parameter
             # configurable from config file
-            participants = db.session \
-                .query(Submission.user_id, func.max(Evaluation.evaluation_public)) \
-                .join(Submission) \
-                .group_by(Submission.user_id) \
-                .order_by(Evaluation.evaluation_public.desc()) \
+            participants = (
+                db.session.query(
+                    Submission.user_id, func.max(Evaluation.evaluation_public)
+                )
+                .join(Submission)
+                .group_by(Submission.user_id)
+                .order_by(Evaluation.evaluation_public.desc())
                 .all()
+            )
             score = request.args.get("score")
             highlight_user_id = request.args.get("highlight")
-            participants = [(user_id, competition_tools.score_mapper(score)) for user_id, score in participants]
+            participants = [
+                (user_id, competition_tools.score_mapper(score))
+                for user_id, score in participants
+            ]
             if score:
                 try:
                     score = competition_tools.score_mapper(float(score))
-                except: # Just in case someone passes something nasty for `score`
+                except:  # Just in case someone passes something nasty for `score`
                     score = None
 
             left = request.args.get("left", None)
-            return render_template("leaderboard.html",
-                                   name=app.config["NAME"],
-                                   score=score,
-                                   highlight_user_id=highlight_user_id,
-                                   participants=participants,
-                                   can_submit=True,
-                                   close_time=stage_handler.close_time,
-                                   is_closed=stage_handler.is_closed(),
-                                   left=left)
+            return render_template(
+                "leaderboard.html",
+                name=app.config["NAME"],
+                score=score,
+                highlight_user_id=highlight_user_id,
+                participants=participants,
+                can_submit=True,
+                close_time=stage_handler.close_time,
+                is_closed=stage_handler.is_closed(),
+                left=left,
+            )
 
     except Exception as ex:
         traceback.print_stack()
         traceback.print_exc()
-        return redirect(url_for('error', error_message=ex))
+        return redirect(url_for("error", error_message=ex))
+
 
 ###################
 # final leaderboard
 ###################
 
-@app.route('/fleaderboard', methods=["GET"])
+
+@app.route("/fleaderboard", methods=["GET"])
 def fleaderboard():
 
     try:
@@ -372,38 +470,55 @@ def fleaderboard():
         api_key = request.args.get("api_key", None)
         if api_key is not None:
             user_id = get_user_id(api_key)
-            app.logger.info(f"Received request to final leaderboard page by user_id '{user_id}'.")
+            app.logger.info(
+                f"Received request to final leaderboard page by user_id '{user_id}'."
+            )
 
     except Exception as ex:
         traceback.print_stack()
         traceback.print_exc()
-        return redirect(url_for('error', error_message=ex))
+        return redirect(url_for("error", error_message=ex))
 
-    if ((user_id is None) or (user_id not in [app.config['ADMIN_USER_ID']])):
+    if (user_id is None) or (user_id not in [app.config["ADMIN_USER_ID"]]):
         return redirect(url_for("leaderboard"))
 
     participants = []
 
     # Get the max private score corresponding for the peope that have selected aty least one solution
-    participants_select = db.session \
-        .query(Submission.user_id, func.max(Evaluation.evaluation_private)) \
-        .join(Submission) \
-        .filter(Submission.timestamp < stage_handler.close_time, Evaluation.private_check.is_(True)) \
-        .group_by(Submission.user_id) \
-        .order_by(Evaluation.evaluation_private.desc()) \
+    participants_select = (
+        db.session.query(Submission.user_id, func.max(Evaluation.evaluation_private))
+        .join(Submission)
+        .filter(
+            Submission.timestamp < stage_handler.close_time,
+            Evaluation.private_check.is_(True),
+        )
+        .group_by(Submission.user_id)
+        .order_by(Evaluation.evaluation_private.desc())
         .all()
+    )
 
     print("participants_select:", participants_select)
     participants += participants_select
 
     # Get the people that did not select any solutions sorted by user_id, evaluation_public and timestamp
-    participants_not_select = db.session \
-        .query(Submission.user_id, Evaluation.evaluation_public, Evaluation.evaluation_private) \
-        .join(Submission) \
-        .filter(Submission.timestamp < stage_handler.close_time,
-                Submission.user_id.notin_([u_id for u_id, _ in participants_select])) \
-        .order_by(Submission.user_id.desc(), Evaluation.evaluation_public.desc(), Submission.timestamp.desc()) \
+    participants_not_select = (
+        db.session.query(
+            Submission.user_id,
+            Evaluation.evaluation_public,
+            Evaluation.evaluation_private,
+        )
+        .join(Submission)
+        .filter(
+            Submission.timestamp < stage_handler.close_time,
+            Submission.user_id.notin_([u_id for u_id, _ in participants_select]),
+        )
+        .order_by(
+            Submission.user_id.desc(),
+            Evaluation.evaluation_public.desc(),
+            Submission.timestamp.desc(),
+        )
         .all()
+    )
 
     print("participants_not_select:", participants_not_select)
 
@@ -417,126 +532,194 @@ def fleaderboard():
 
     # Sort the scores
     participants = sorted(participants, key=lambda x: x[1], reverse=True)
-    participants = [(user_id, competition_tools.score_mapper(score)) for user_id, score in participants]
+    participants = [
+        (user_id, competition_tools.score_mapper(score))
+        for user_id, score in participants
+    ]
 
-    return render_template("leaderboard.html", participants=participants, can_submit=False)
+    return render_template(
+        "leaderboard.html", participants=participants, can_submit=False
+    )
+
 
 ################
 # Show evaluate score
 ################
-@app.route('/show_evaluate_score', methods=["GET"])
+@app.route("/show_evaluate_score", methods=["GET"])
 def show_evaluate_score():
-    return render_template('evaluation_score.html',
-                           pub_score=request.args.get("pub_score"),
-                           priv_score=request.args.get("priv_score"),
-                           baseline=int(request.args.get("baseline")))
+    return render_template(
+        "evaluation_score.html",
+        pub_score=request.args.get("pub_score"),
+        priv_score=request.args.get("priv_score"),
+        baseline=int(request.args.get("baseline")),
+    )
+
 
 ################
 # Evaluate
 ################
-@app.route('/evaluate', methods=["GET"])
+@app.route("/evaluate", methods=["GET"])
 def evaluate():
     try:
         api_key = request.args.get("api_key")
         user_id = get_user_id(api_key)
 
-        if (user_id not in [app.config['ADMIN_USER_ID'], app.config['BASELINE_USER_ID']]) and\
-                (not stage_handler.can_submit()):
-            return redirect(url_for('leaderboard'))
+        if (
+            user_id not in [app.config["ADMIN_USER_ID"], app.config["BASELINE_USER_ID"]]
+        ) and (not stage_handler.can_submit()):
+            return redirect(url_for("leaderboard"))
         else:
 
             submission_id = request.args.get("submission_id")
-            submission = Submission.query.filter_by(id=submission_id, user_id=user_id).first()
-            public_score, private_score = eval_public_private(submission.filename, app.config['TEST_FILE_PATH'])
+            submission = Submission.query.filter_by(
+                id=submission_id, user_id=user_id
+            ).first()
+            public_score, private_score = eval_public_private(
+                submission.filename, app.config["TEST_FILE_PATH"]
+            )
             if not submission:
                 # not found!
                 raise Exception("Submission not found!")
 
-            if user_id == app.config['ADMIN_USER_ID']:
+            if user_id == app.config["ADMIN_USER_ID"]:
                 return redirect(
-                    url_for("show_evaluate_score", pub_score=public_score, priv_score=private_score, baseline=0))
+                    url_for(
+                        "show_evaluate_score",
+                        pub_score=public_score,
+                        priv_score=private_score,
+                        baseline=0,
+                    )
+                )
             else:
-                evaluation = Evaluation(submission=submission, evaluation_public=public_score, evaluation_private=private_score)
+                evaluation = Evaluation(
+                    submission=submission,
+                    evaluation_public=public_score,
+                    evaluation_private=private_score,
+                )
                 db.session.add(evaluation)
                 db.session.commit()
 
-                if user_id == app.config['BASELINE_USER_ID']:
+                if user_id == app.config["BASELINE_USER_ID"]:
                     return redirect(
-                        url_for("show_evaluate_score", pub_score=public_score, priv_score=private_score, baseline=1))
+                        url_for(
+                            "show_evaluate_score",
+                            pub_score=public_score,
+                            priv_score=private_score,
+                            baseline=1,
+                        )
+                    )
                 else:
-                    submissions_left = int(app.config['MAX_NUMBER_SUBMISSIONS'] - competition_tools.get_user_submissions_number(user_id=user_id, db=db))
+                    submissions_left = int(
+                        app.config["MAX_NUMBER_SUBMISSIONS"]
+                        - competition_tools.get_user_submissions_number(
+                            user_id=user_id, db=db
+                        )
+                    )
 
-                    return redirect(url_for('leaderboard',
-                                            score=public_score,
-                                            highlight=user_id,
-                                            left=submissions_left
-                                            ))
+                    return redirect(
+                        url_for(
+                            "leaderboard",
+                            score=public_score,
+                            highlight=user_id,
+                            left=submissions_left,
+                        )
+                    )
 
     except Exception as ex:
         traceback.print_stack()
         traceback.print_exc()
-        return redirect(url_for('error', error_message=ex))
+        return redirect(url_for("error", error_message=ex))
+
 
 ################
 # Upload
 ################
-@app.route('/upload', methods=["POST"])
+@app.route("/upload", methods=["POST"])
 def upload():
     try:
         api_key = request.form.get("api_key", None)
         user_id = get_user_id(api_key)  # This will be stored in the Submissions table
 
         # TODO Handle this. Doing so, a student who loaded the page before the deadline can still perform the submission
-        if (user_id not in [app.config['ADMIN_USER_ID'], app.config['BASELINE_USER_ID']]) and\
-                (not stage_handler.can_submit()):
+        if (
+            user_id not in [app.config["ADMIN_USER_ID"], app.config["BASELINE_USER_ID"]]
+        ) and (not stage_handler.can_submit()):
             return redirect(url_for("leaderboard"))
         else:
             error_message = ""
             # Check submit request id
 
-            if ("submit_request_id" not in session.keys()) or \
-                    (session["submit_request_id"] != request.form.get('submitRequestId', None)):
+            if ("submit_request_id" not in session.keys()) or (
+                session["submit_request_id"]
+                != request.form.get("submitRequestId", None)
+            ):
                 error_message = "Wrong request. Use the form web page to upload a solution or try to reload the page!"
                 raise Exception(error_message)
 
             # Save submitted solution
-            if request.method == 'POST':
-                latest_submission = db.session.query(func.max(Submission.timestamp)).filter(Submission.user_id == user_id).first()[0]
+            if request.method == "POST":
+                latest_submission = (
+                    db.session.query(func.max(Submission.timestamp))
+                    .filter(Submission.user_id == user_id)
+                    .first()[0]
+                )
                 now = datetime.utcnow()
 
-                if user_id not in [app.config['ADMIN_USER_ID'], app.config['BASELINE_USER_ID']]:
+                if user_id not in [
+                    app.config["ADMIN_USER_ID"],
+                    app.config["BASELINE_USER_ID"],
+                ]:
 
-                    if latest_submission and (now - latest_submission).total_seconds() < app.config['TIME_BETWEEN_SUBMISSIONS']:
-                        delta = max(5, int(app.config['TIME_BETWEEN_SUBMISSIONS'] - (now - latest_submission).total_seconds())) # avoid messages such as "try again in 0/1/2 seconds" (TODO remove magic number 5)
-                        raise Exception(f"You are exceeding the {app.config['TIME_BETWEEN_SUBMISSIONS']} seconds limit between submissions. Please try again in {delta} seconds")
+                    if (
+                        latest_submission
+                        and (now - latest_submission).total_seconds()
+                        < app.config["TIME_BETWEEN_SUBMISSIONS"]
+                    ):
+                        delta = max(
+                            5,
+                            int(
+                                app.config["TIME_BETWEEN_SUBMISSIONS"]
+                                - (now - latest_submission).total_seconds()
+                            ),
+                        )  # avoid messages such as "try again in 0/1/2 seconds" (TODO remove magic number 5)
+                        raise Exception(
+                            f"You are exceeding the {app.config['TIME_BETWEEN_SUBMISSIONS']} seconds limit between submissions. Please try again in {delta} seconds"
+                        )
 
-                    n_submissions = competition_tools.get_user_submissions_number(user_id=user_id, db=db)
-                    if n_submissions >= app.config['MAX_NUMBER_SUBMISSIONS']:
-                        raise Exception(f"You are exceeding the max submissions limit of {app.config['MAX_NUMBER_SUBMISSIONS']}. "
-                                        f"You are no more allowed to submit any solution.")
+                    n_submissions = competition_tools.get_user_submissions_number(
+                        user_id=user_id, db=db
+                    )
+                    if n_submissions >= app.config["MAX_NUMBER_SUBMISSIONS"]:
+                        raise Exception(
+                            f"You are exceeding the max submissions limit of {app.config['MAX_NUMBER_SUBMISSIONS']}. "
+                            f"You are no more allowed to submit any solution."
+                        )
 
                 # check if the post request has the file part
-                if 'submittedSolutionFile' not in request.files:
-                    error_message = 'No file part'
+                if "submittedSolutionFile" not in request.files:
+                    error_message = "No file part"
                     raise Exception(error_message)
 
-                file = request.files['submittedSolutionFile']
+                file = request.files["submittedSolutionFile"]
                 if not file:
-                    error_message = 'Error uploading solution file.'
+                    error_message = "Error uploading solution file."
                     raise Exception(error_message)
 
                 # if user does not select file, browser also
                 # submit an empty part without filename
-                if file.filename == '':
-                    error_message = 'No selected file'
+                if file.filename == "":
+                    error_message = "No selected file"
                     raise Exception(error_message)
 
-                if competition_tools.allowed_file(file.filename) and \
-                        competition_tools.check_file(file, app.config['TEST_FILE_PATH']):
+                if competition_tools.allowed_file(
+                    file.filename
+                ) and competition_tools.check_file(file, app.config["TEST_FILE_PATH"]):
 
                     timestamp = competition_tools.get_timestamp()
                     new_file_name = f"{timestamp}_{user_id}.csv"
-                    output_file = os.path.join(app.config['UPLOAD_FOLDER'], new_file_name)
+                    output_file = os.path.join(
+                        app.config["UPLOAD_FOLDER"], new_file_name
+                    )
                     # we are reading the stream when checking the file, so we need to go back to the start
                     file.stream.seek(0)
                     file.save(output_file)
@@ -545,41 +728,52 @@ def upload():
                     db.session.commit()
                     # By passing api_key, we can later check that the user calling /evaluate
                     # is the same that has made the submission
-                    return redirect(url_for('evaluate', submission_id=submission.id, api_key=api_key))
+                    return redirect(
+                        url_for(
+                            "evaluate", submission_id=submission.id, api_key=api_key
+                        )
+                    )
                 else:
                     raise Exception("You should not be here!")
 
     except Exception as ex:
         traceback.print_stack()
         traceback.print_exc()
-        return redirect(url_for('error', error_message=ex))
+        return redirect(url_for("error", error_message=ex))
 
 
 ################
 # Submit
 ################
-@app.route('/submit', methods=["GET"])
+@app.route("/submit", methods=["GET"])
 def submit():
     try:
         user_id = None
         api_key = request.args.get("api_key", None)
         if api_key is not None:
             user_id = get_user_id(api_key)
-            app.logger.info(f"Received request to submission page by user_id '{user_id}'.")
+            app.logger.info(
+                f"Received request to submission page by user_id '{user_id}'."
+            )
 
-        if ((user_id is None) or (user_id not in [app.config['ADMIN_USER_ID']])) and\
-                (not stage_handler.can_submit()):
+        if ((user_id is None) or (user_id not in [app.config["ADMIN_USER_ID"]])) and (
+            not stage_handler.can_submit()
+        ):
             return redirect(url_for("leaderboard"))
         else:
             submit_request_id = secrets.token_hex()
             session["submit_request_id"] = submit_request_id
-            return render_template("submit.html", submit_request_id=submit_request_id, is_closed=stage_handler.is_closed())
+            return render_template(
+                "submit.html",
+                submit_request_id=submit_request_id,
+                is_closed=stage_handler.is_closed(),
+            )
 
     except Exception as ex:
         traceback.print_stack()
         traceback.print_exc()
-        return redirect(url_for('error', error_message=ex))
+        return redirect(url_for("error", error_message=ex))
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=False)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080, debug=False)
