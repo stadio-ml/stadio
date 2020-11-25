@@ -28,10 +28,10 @@ class CompetitionConfig:
     MAX_FILE_SIZE = 32 * 1024 * 1024  # limit upload file size to 32MB
 
     # File used to identify users on the platform
-    API_FILE = join(BASE_DIR, "mappings.dummy.json")  # API mappings
+    API_FILE = join(BASE_DIR, "mappings.dummy.tsv")  # API mappings
 
     # The sqlite database for the current competition
-    DB_FILE = join(BASE_DIR, "sqlite:///test.db")
+    DB_FILE = "sqlite:///" + join(BASE_DIR, "test.db")
 
     TIME_BETWEEN_SUBMISSIONS = 5 * 60  # 5 minutes between submissions
     MAX_NUMBER_SUBMISSIONS = 100
