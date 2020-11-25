@@ -16,3 +16,7 @@ db.create_all() # TODO: Expand on this
 python app.py
 ```
 
+
+Example mappings file at [mappings example](https://github.com/dbdmg/utilities/blob/main/utilities/mappings.dummy.tsv)
+
+
