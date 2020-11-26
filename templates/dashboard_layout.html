@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    {% include "includes/_head.html" %}
+</head>
+<body style="width:100%;">
+<div id="dashboard" class="container-fluid fill-height">
+
+
+    <nav class=" navbar navbar-light bg-light navbar-expand-lg sticky-top">
+        <a class="py-2" href="/">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 class="d-block mx-auto">
+                <circle cx="12" cy="12" r="10"></circle>
+
+            </svg>
+        </a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavAltMarkup"
+                aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+            <div class="navbar-nav">
+
+                <a class="py-2 nav-item nav-link" href="/general_dashboard">General dashboard</a>
+                <a class="py-2 nav-item nav-link" href="/student_dashboard">Student dashboard</a>
+            </div>
+        </div>
+    </nav>
+
+
+    {% block body %}{% endblock %}
+
+
+</div>
+</body>
+</html>

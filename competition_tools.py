@@ -7,6 +7,7 @@ import os
 from enum import Enum
 from evaluation_functions import evaluator
 from sqlalchemy import inspect, func
+from config import CompetitionConfig
 
 import numpy as np
 
@@ -26,6 +27,73 @@ SOLUTION_HEADER = [INDEX, TARGET, PUBLIC]
 score_mapper = lambda score: f"{score :.3f}"
 
 
+def get_user_scores(db, user_id):
+    participants = db.session \
+        .query(Submission.user_id, Submission.timestamp, Evaluation.evaluation_public, Evaluation.evaluation_private) \
+        .join(Submission) \
+        .filter(Submission.user_id == user_id)\
+        .order_by(Evaluation.evaluation_public.desc()) \
+        .all()
+
+    participants = [(user_id, time, score_mapper(pub_score), score_mapper(priv_score)) for user_id, time, pub_score, priv_score in participants]
+    return participants
+
+def get_public_leaderboard(db):
+    participants = db.session \
+        .query(Submission.user_id, func.max(Evaluation.evaluation_public)) \
+        .join(Submission) \
+        .group_by(Submission.user_id) \
+        .order_by(Evaluation.evaluation_public.desc()) \
+        .all()
+
+    participants = [(user_id, score_mapper(score)) for user_id, score in participants]
+    return participants
+
+
+def get_private_leaderboard(db, stage_handler):
+    participants = []
+
+    # Get the max private score corresponding for the peope that have selected aty least one solution
+    participants_select = db.session \
+        .query(Submission.user_id, func.max(Evaluation.evaluation_private)) \
+        .join(Submission) \
+        .filter(Submission.timestamp < stage_handler.close_time, Evaluation.private_check.is_(True)) \
+        .group_by(Submission.user_id) \
+        .order_by(Evaluation.evaluation_private.desc()) \
+        .all()
+
+    participants += participants_select
+
+    # Get the people that did not select any solutions sorted by user_id, evaluation_public and timestamp
+    participants_not_select = db.session \
+        .query(Submission.user_id, Evaluation.evaluation_public, Evaluation.evaluation_private) \
+        .join(Submission) \
+        .filter(Submission.timestamp < stage_handler.close_time,
+                Submission.user_id.notin_([u_id for u_id, _ in participants_select])) \
+        .order_by(Submission.user_id.desc(), Evaluation.evaluation_public.desc(), Submission.timestamp.desc()) \
+        .all()
+    # Get the private score corresponding to the max public score for the people that did not select any solutions
+    # Since data is sorted desc, the first entry for each user is the score to take
+    u_placeholder = set()
+    for pns in participants_not_select:
+        if pns[0] not in u_placeholder:
+            participants.append((pns[0], pns[2]))
+        u_placeholder.add(pns[0])
+
+    # Sort the scores
+    participants = sorted(participants, key=lambda x: x[1], reverse=True)
+    participants = [(user_id, score_mapper(score)) for user_id, score in participants]
+
+    return participants
+
+def get_peruser_submissions_number(db):
+    peruser_submission_count = db.session \
+        .query(Submission.user_id, func.count(Submission.user_id)) \
+        .filter(Submission.user_id != CompetitionConfig.ADMIN_USER_ID) \
+        .group_by(Submission.user_id) \
+        .all()  # this result contains the baseline scores
+    return peruser_submission_count
+
 def get_user_submissions_number(user_id, db):
     submission_count = (
         db.session.query(func.count(Evaluation.submission_id))
@@ -35,6 +103,11 @@ def get_user_submissions_number(user_id, db):
     )
     return submission_count
 
+def get_submissions_number(db):
+    submission_count = db.session \
+        .query(func.count(Evaluation.submission_id)) \
+        .scalar()
+    return submission_count
 
 def check_solution_file(solution_file):
     print(f"Checking solution file '{solution_file}'...")
@@ -226,3 +299,5 @@ class StageHandler:
     def can_submit(self):
         stage = self._get_stage()
         return stage == Stage.OPEN or stage == Stage.CLOSED
+
+

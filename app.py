@@ -8,10 +8,14 @@ import os
 import secrets
 from api_utils import ApiAuth
 from models import db, Submission, Evaluation
-from competition_tools import eval_public_private, StageHandler
+from competition_tools import eval_public_private, StageHandler, score_mapper
+from evaluation_functions import evaluator_name
 from sqlalchemy import func
 from datetime import datetime
 
+import pandas as pd
+import numpy as np
+from scipy.stats import trim_mean
 
 app = Flask(__name__, static_url_path="", static_folder="static")
 app.config.from_object("config.CompetitionConfig")
@@ -53,6 +57,199 @@ def get_user_id(api_key):
     user_id = api_auth.get_user(api_key)
     return user_id
 
+
+@app.route('/dashboard_login', methods=["GET"])
+def dashboard_login():
+    api_key = request.args.get("api_key")
+    try:
+        request_user_id = get_user_id(api_key)
+        print(request_user_id)
+        if request_user_id not in [app.config["ADMIN_USER_ID"]]:
+            return redirect(url_for("leaderboard"))
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for("error", error_message=ex))
+
+    session["dashboard_login"] = True
+
+    return redirect(url_for("general_dashboard"))
+
+
+@app.route('/dashboard_logout', methods=["GET"])
+def dashboard_logout():
+    session.pop('dashboard_login', None)
+    return redirect(url_for("leaderboard"))
+
+
+###################
+# Student_dashboard
+###################
+@app.route('/student_dashboard', methods=["GET"])
+@app.route('/student_dashboard/<string:user_id>', methods=["GET"])
+def student_dashboard(user_id=None):
+    try:
+        if ("dashboard_login" not in session.keys()) or (
+                session["dashboard_login"] is False
+        ):
+            error_message = "Login to access the dashboard!"
+            raise Exception(error_message)
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for("error", error_message=ex))
+
+    pub_leader = competition_tools.get_public_leaderboard(db)
+    priv_leader = competition_tools.get_private_leaderboard(db, stage_handler)
+    print(pub_leader)
+
+    pub_leader_df = pd.DataFrame(pub_leader, columns=["user_id", "public"])
+    priv_leader_df = pd.DataFrame(priv_leader, columns=["user_id", "private"])
+
+    # TODO manage empty leaderboard
+    print(pub_leader_df.info())
+    print(priv_leader_df.info())
+    pub_priv_leader_df = pd.merge(pub_leader_df, priv_leader_df, on="user_id", validate="one_to_one")
+
+    if user_id is None:
+        return render_template("student_dashboard.html", user_id = user_id, leaderboard=pub_priv_leader_df.to_dict(orient="index"),
+                               selected_user_id=user_id)
+
+    else:
+        try:
+            if user_id not in pub_priv_leader_df["user_id"].values:
+                raise Exception(f"User {user_id} not found.")
+
+            pub_position = np.where(pub_priv_leader_df.sort_values(["public"], ascending=False)["user_id"].values == user_id)[0][0] + 1
+            priv_position = np.where(pub_priv_leader_df.sort_values(["private"], ascending=False)["user_id"].values == user_id)[0][0] + 1
+
+            priv_score_on_leaderboard = pub_priv_leader_df.loc[pub_position-1, "private"]
+
+            user_scores = competition_tools.get_user_scores(db, user_id)
+
+            user_scores = pd.DataFrame(user_scores).rename({0: "user_id", 1: "timestamp", 2: "public", 3: "private"}, axis=1)
+            user_scores["public"] = user_scores["public"].astype(float)
+            user_scores["private"] = user_scores["private"].astype(float)
+
+            user_scores = user_scores.replace([np.inf, -np.inf], np.nan)
+
+            #print(user_scores)
+
+            n_submissions = len(user_scores)
+
+            max_public = competition_tools.score_mapper(user_scores["public"].max())
+            avg_public = competition_tools.score_mapper(trim_mean(user_scores["public"], 0.1))
+            std_public = competition_tools.score_mapper(user_scores["public"].std())
+
+            max_private = competition_tools.score_mapper(user_scores["private"].max())
+            avg_private = competition_tools.score_mapper(trim_mean(user_scores["private"], 0.1))
+            std_private = competition_tools.score_mapper(user_scores["private"].std())
+
+            user_scores_sub_freq = user_scores.copy()
+            # user_scores_sub_freq["timestamp"] = pd.to_datetime(user_scores["timestamp"])
+            # print(user_scores_sub_freq)
+            # print(user_scores_sub_freq.dtypes)
+            user_scores_sub_freq = user_scores_sub_freq.groupby(pd.Grouper(key="timestamp", freq="1D"))\
+                .size().to_frame()\
+                .rename({0: "count"}, axis=1)\
+                .reset_index()
+
+            #print(user_scores_sub_freq)
+
+            # compute KPI
+            return render_template("student_dashboard.html", user_id = user_id,
+                                   leaderboard=pub_priv_leader_df.to_dict(orient="index"),
+                                   selected_user_id=user_id,
+                                   pub_position=pub_position,
+                                   priv_position=priv_position,
+                                   priv_score_on_leaderboard=priv_score_on_leaderboard,
+                                   n_submissions=n_submissions,
+                                   max_public=max_public,
+                                   avg_public=avg_public,
+                                   std_public=std_public,
+                                   max_private=max_private,
+                                   avg_private=avg_private,
+                                   std_private=std_private,
+                                   user_scores=user_scores.to_json(orient="index"),
+                                   user_scores_sub_freq = user_scores_sub_freq.to_json(orient="index")
+                                   )
+        except Exception as ex:
+            traceback.print_stack()
+            traceback.print_exc()
+            return redirect(url_for('error', error_message=ex))
+
+            # return render_template("student_dashboard.html", leaderboard=pub_priv_leader_df.to_dict(orient="index"),
+            #                        error=str(ex))
+
+@app.route('/general_dashboard', methods=["GET"])
+def general_dashboard():
+    try:
+        if ("dashboard_login" not in session.keys()) or (
+                session["dashboard_login"] is False
+        ):
+            error_message = "Login to access the dashboard!"
+            raise Exception(error_message)
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for("error", error_message=ex))
+
+    try:
+        pub_leader = competition_tools.get_public_leaderboard(db)
+        priv_leader = competition_tools.get_private_leaderboard(db, stage_handler)
+        pub_leader_df = pd.DataFrame(pub_leader, columns=["user_id", "public"])
+        priv_leader_df = pd.DataFrame(priv_leader, columns=["user_id", "private"])
+        pub_priv_leader_df = pd.merge(pub_leader_df, priv_leader_df, on="user_id", validate="one_to_one")
+
+        pub_priv_leader_df.private = pub_priv_leader_df.private.astype(float)
+        pub_priv_leader_df.public = pub_priv_leader_df.public.astype(float)
+
+        # Here eventual -Inf values in the dataframe are omitted from statistics.
+        # TODO consider trimmed mean?
+        submission_info = dict(
+            last_update=datetime.now(),
+            count=competition_tools.get_submissions_number(db),
+            public_mean=score_mapper(pub_priv_leader_df.public.mean()),
+            public_std=score_mapper(pub_priv_leader_df.public.std()),
+            private_mean=score_mapper(pub_priv_leader_df.private.mean()),
+            private_std=score_mapper(pub_priv_leader_df.private.std())
+        )
+
+        competition_info = dict(
+            name=app.config['NAME'],
+            open_time=app.config['OPEN_TIME'],
+            close_time=app.config['CLOSE_TIME'],
+            evaluator_name=evaluator_name
+        )
+
+        peruser_submission_number = pd.DataFrame(competition_tools.get_peruser_submissions_number(db), columns=["user_id", "submission_count"])
+        peruser_info = pd.merge(peruser_submission_number, pub_priv_leader_df, on="user_id", validate="one_to_one")\
+            .set_index("user_id")
+
+        # get and filter baseline score to provide it separately
+        try:
+            baseline_info = peruser_info.loc[app.config['BASELINE_USER_ID']]
+        except Exception as ex:
+            print(ex)
+            baseline_info = None
+
+        try:
+            peruser_info = peruser_info.loc[peruser_info.index != app.config['BASELINE_USER_ID']]
+        except Exception as ex:
+            print(ex)
+            peruser_info = None
+
+        return render_template("general_dashboard.html",
+                               competition_info=competition_info,
+                               submission_info=submission_info,
+                               peruser_info=peruser_info.to_json(orient="index") if peruser_info is not None else None,
+                               baseline_info=baseline_info.to_json(orient="index") if baseline_info is not None else None
+                               )
+
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for('error', error_message=ex))
 
 ################
 # Error Handling
