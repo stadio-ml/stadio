@@ -49,7 +49,6 @@ competition_tools.schedule_db_dump(
     dump_out=app.config["DUMP_FOLDER"],
 )
 
-
 def get_user_id(api_key):
     if not api_auth.is_valid_key(api_key):
         # TODO build dictionary of possible errors & avoid hardcoding strings
@@ -58,20 +57,42 @@ def get_user_id(api_key):
     return user_id
 
 
+@app.route('/dashboard_login', methods=["GET"])
+def dashboard_login():
+    api_key = request.args.get("api_key")
+    try:
+        request_user_id = get_user_id(api_key)
+        print(request_user_id)
+        if request_user_id not in [app.config["ADMIN_USER_ID"]]:
+            return redirect(url_for("leaderboard"))
+    except Exception as ex:
+        traceback.print_stack()
+        traceback.print_exc()
+        return redirect(url_for("error", error_message=ex))
+
+    session["dashboard_login"] = True
+
+    return redirect(url_for("general_dashboard"))
+
+
+@app.route('/dashboard_logout', methods=["GET"])
+def dashboard_logout():
+    session.pop('dashboard_login', None)
+    return redirect(url_for("leaderboard"))
+
+
 ###################
 # Student_dashboard
 ###################
 @app.route('/student_dashboard', methods=["GET"])
 @app.route('/student_dashboard/<string:user_id>', methods=["GET"])
 def student_dashboard(user_id=None):
-
-    api_key = request.args.get("api_key")
-    print(api_key)
     try:
-        request_user_id = get_user_id(api_key)
-        print(request_user_id)
-        if request_user_id not in [app.config["ADMIN_USER_ID"]]:
-            return redirect(url_for("leaderboard"))
+        if ("dashboard_login" not in session.keys()) or (
+                session["dashboard_login"] is False
+        ):
+            error_message = "Login to access the dashboard!"
+            raise Exception(error_message)
     except Exception as ex:
         traceback.print_stack()
         traceback.print_exc()
@@ -88,7 +109,6 @@ def student_dashboard(user_id=None):
     print(pub_leader_df.info())
     print(priv_leader_df.info())
     pub_priv_leader_df = pd.merge(pub_leader_df, priv_leader_df, on="user_id", validate="one_to_one")
-
 
     if user_id is None:
         return render_template("student_dashboard.html", user_id = user_id, leaderboard=pub_priv_leader_df.to_dict(orient="index"),
@@ -162,13 +182,12 @@ def student_dashboard(user_id=None):
 
 @app.route('/general_dashboard', methods=["GET"])
 def general_dashboard():
-    api_key = request.args.get("api_key")
-    print(api_key)
     try:
-        request_user_id = get_user_id(api_key)
-        print(request_user_id)
-        if request_user_id not in [app.config["ADMIN_USER_ID"]]:
-            return redirect(url_for("leaderboard"))
+        if ("dashboard_login" not in session.keys()) or (
+                session["dashboard_login"] is False
+        ):
+            error_message = "Login to access the dashboard!"
+            raise Exception(error_message)
     except Exception as ex:
         traceback.print_stack()
         traceback.print_exc()
