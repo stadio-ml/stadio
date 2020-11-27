@@ -53,7 +53,7 @@ def get_public_leaderboard(db):
 def get_private_leaderboard(db, stage_handler):
     participants = []
 
-    # Get the max private score corresponding for the peope that have selected aty least one solution
+    # Get the max private score corresponding to the people that have selected at least one solution
     participants_select = db.session \
         .query(Submission.user_id, func.max(Evaluation.evaluation_private)) \
         .join(Submission) \

@@ -63,7 +63,7 @@ def dashboard_login():
     api_key = request.args.get("api_key")
     try:
         request_user_id = get_user_id(api_key)
-        print(request_user_id)
+        # print(request_user_id)
         if request_user_id not in [app.config["ADMIN_USER_ID"]]:
             return redirect(url_for("leaderboard"))
     except Exception as ex:
@@ -101,14 +101,11 @@ def student_dashboard(user_id=None):
 
     pub_leader = competition_tools.get_public_leaderboard(db)
     priv_leader = competition_tools.get_private_leaderboard(db, stage_handler)
-    print(pub_leader)
 
     pub_leader_df = pd.DataFrame(pub_leader, columns=["user_id", "public"])
     priv_leader_df = pd.DataFrame(priv_leader, columns=["user_id", "private"])
 
     # TODO manage empty leaderboard
-    print(pub_leader_df.info())
-    print(priv_leader_df.info())
     pub_priv_leader_df = pd.merge(pub_leader_df, priv_leader_df, on="user_id", validate="one_to_one")
 
     if user_id is None:
@@ -133,8 +130,6 @@ def student_dashboard(user_id=None):
 
             user_scores = user_scores.replace([np.inf, -np.inf], np.nan)
 
-            #print(user_scores)
-
             n_submissions = len(user_scores)
 
             max_public = competition_tools.score_mapper(user_scores["public"].max())
@@ -147,14 +142,11 @@ def student_dashboard(user_id=None):
 
             user_scores_sub_freq = user_scores.copy()
             # user_scores_sub_freq["timestamp"] = pd.to_datetime(user_scores["timestamp"])
-            # print(user_scores_sub_freq)
-            # print(user_scores_sub_freq.dtypes)
+
             user_scores_sub_freq = user_scores_sub_freq.groupby(pd.Grouper(key="timestamp", freq="1D"))\
                 .size().to_frame()\
                 .rename({0: "count"}, axis=1)\
                 .reset_index()
-
-            #print(user_scores_sub_freq)
 
             # compute KPI
             return render_template("student_dashboard.html", user_id = user_id,
@@ -230,13 +222,15 @@ def general_dashboard():
         try:
             baseline_info = peruser_info.loc[app.config['BASELINE_USER_ID']]
         except Exception as ex:
-            print(ex)
+            traceback.print_stack()
+            traceback.print_exc()
             baseline_info = None
 
         try:
             peruser_info = peruser_info.loc[peruser_info.index != app.config['BASELINE_USER_ID']]
         except Exception as ex:
-            print(ex)
+            traceback.print_stack()
+            traceback.print_exc()
             peruser_info = None
 
         return render_template("general_dashboard.html",
@@ -280,7 +274,7 @@ def update_submissions():
 
     user_id = api_auth.get_user(session["api_key"])
     checked_submission_ids = [int(checked_s_id) for checked_s_id in request.form]
-    print("checked_submission_ids:", checked_submission_ids)
+    # print("checked_submission_ids:", checked_submission_ids)
 
     try:
         with_success = True
@@ -296,7 +290,7 @@ def update_submissions():
                 f"Only two submissions can be selected for the final evaluation. You selected {len(user_evals)}."
             )
 
-        print("user_evals:", user_evals)
+        # print("user_evals:", user_evals)
 
         for e in user_evals:
             e.private_check = False
@@ -376,7 +370,7 @@ def submissions():
                 .filter_by(user_id=user_id)
                 .all()
             )
-            print(user_submissions)
+            # print(user_submissions)
             user_submissions = [
                 (s_id, timestamp, user_id, competition_tools.score_mapper(score), check)
                 for s_id, timestamp, user_id, score, check in user_submissions
@@ -517,7 +511,7 @@ def fleaderboard():
         .all()
     )
 
-    print("participants_select:", participants_select)
+    # print("participants_select:", participants_select)
     participants += participants_select
 
     # Get the people that did not select any solutions sorted by user_id, evaluation_public and timestamp
@@ -540,7 +534,7 @@ def fleaderboard():
         .all()
     )
 
-    print("participants_not_select:", participants_not_select)
+    # print("participants_not_select:", participants_not_select)
 
     # Get the private score corresponding to the max public score for the people that did not select any solutions
     # Since data is sorted desc, the first entry for each user is the score to take
