@@ -1,14 +1,14 @@
 # DSL Competitions submission tool
 
-### TODO list before running a competition
+### Check list before running a competition
 1. Create competition_folder, with:
-    a. eval_solution.csv
-    b. dump folder
-    c. uploads folder
-    d. mappings.tsv file
+    - eval_solution.csv
+    - dump folder
+    - uploads folder
+    - mappings.tsv file
 2. Update config.py
 3. Update evaluation_function.py with evaluation function
-4. Run competition
+4. Run the competition
 
 ### Setup
 1. Create and activate a virtual environment with Python 3 (>= 3.6 recommended). E.g.
