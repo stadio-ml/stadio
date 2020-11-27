@@ -12,7 +12,7 @@
 
 ### Setup
 1. Create and activate a virtual environment with Python 3 (>= 3.6 recommended). E.g.
-```
+```bash
 python3 -m venv /path/to/new/virtual/environment
 source /path/to/new/virtual/environment/bin/activate
 ```
@@ -36,7 +36,7 @@ python3 WSGI.py
 
 ### Platform Configuration
 Example configuration file:
-```
+```python
     NAME = 'Competition Name'
 
     # UTC TIME (YYYY/MM/DD HH:MM:SS)
@@ -100,7 +100,7 @@ OTHER configuration options:
 ### Submission evaluation
 The `eval_solution.csv` should contain the gold labels for the current competition and the label so specify if each sample should be used for the public or private leader-board.
 The `eval_solution.csv` should have the following structure:
-```
+```csv
 Id,Predicted,Public
 0,0,0
 1,0,1
@@ -126,10 +126,24 @@ List of available APIs:
 
 The special users can access the private sections specifying the parameter `api_key` to each service if available. 
 
-#### Selecting the solutions to evaluate on DSLE
+### Selecting the solutions to evaluate on DSLE
 In the participant's private area they can choose at most 2 solutions to be evaluated.
 DSLE gets the max private score among the selected solutions for the participants that have selected at least one solution.
 Instead, DSLE gets the private score corresponding to the max public score for the people that did not select any solutions.
+
+### Publications
+If you are using the platform or if you are exploiting it in your research project please consider to cite the paper about this project:
+
+```bibtex
+@inproceedings{attanasio2020dsle,
+  title={DSLE: A Smart Platform for Designing Data Science Competitions},
+  author={Attanasio, Giuseppe and Giobergia, Flavio and Pasini, Andrea and Ventura, Francesco and Baralis, Elena and Cagliero, Luca and Garza, Paolo and Apiletti, Daniele and Cerquitelli, Tania and Chiusano, Silvia},
+  booktitle={2020 IEEE 44th Annual Computers, Software, and Applications Conference (COMPSAC)},
+  pages={133--142},
+  year={2020},
+  organization={IEEE}
+}
+```
 
 
 
