@@ -276,7 +276,7 @@ def eval_public_private(submission, solution):
             df_pred.index == df_true.index
         ).all()  # already checked, should be true!
     except Exception:
-        # We shuld never fail here -- the file has already been validated!
+        # We should never fail here -- the file has already been validated!
         raise Exception("Unexpected error! Please contact an administrator")
 
     public_mask = df_true[PUBLIC] == 1
