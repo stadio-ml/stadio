@@ -16,20 +16,26 @@
 python3 -m venv /path/to/new/virtual/environment
 source /path/to/new/virtual/environment/bin/activate
 ```
+
 2. Install requirements
 ```
 pip install -r requirements.txt
 ```
+
 3. Init a new competition by creating the following structure
 ```
-competition_folder
-├── eval_solution.csv
-├── mappings.tsv
-├── dumps/
-└── uploads/
+competition_files
+├── eval_solution.csv  # ground truth and Public/Private information 
+├── mappings.tsv       # file with the roaster and api keys
+├── dumps/             # where to store the db dumps
+└── uploads/           # where to store the file submitted by students
 ```
+
 4. Edit the `config.py` file with the competition metadata
-5. Launch the server
+
+5. Edit the `evaluation_functions.py` file to set the evaluation function 
+
+6. Launch the server
 ```
 python3 WSGI.py
 ```
@@ -113,6 +119,7 @@ Id,Predicted,Public
 The `evaluation_functions.py` contains the evaluation function that should be used for the competition.
 - The `evaluator` attribute contains the function that should be used to evaluate the submissions. The evaluation function should be similar to: `evaluation_function(y_true: Any, y_pred: Any, **kwags)`
 - The `evaluator_name` attribute contains the name of the evaluation function that would appear on the dashboard.
+- The `to_maximize` attribute must be set to specify whether the score produced by the evaluator must be maximized or not (e.g. for *accuracy_score* it should set to `True`)
 
 ### Available services
 List of available APIs:
