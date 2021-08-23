@@ -119,7 +119,7 @@ Id,Predicted,Public
 The `evaluation_functions.py` contains the evaluation function that should be used for the competition.
 - The `evaluator` attribute contains the function that should be used to evaluate the submissions. The evaluation function should be similar to: `evaluation_function(y_true: Any, y_pred: Any, **kwags)`
 - The `evaluator_name` attribute contains the name of the evaluation function that would appear on the dashboard.
-- The `to_maximize` attribute must be set to specify whether the score produced by the evaluator must be maximized or not (e.g. for *accuracy_score* it should set to `True`)
+- The `to_maximize` attribute must be set to specify whether the score produced by the evaluator must be maximized or not (e.g. for *accuracy_score* it should set to `True`, while for *mean_absolute_error* it should be set to `False`)
 
 ### Available services
 List of available APIs:
