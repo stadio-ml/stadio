@@ -508,6 +508,7 @@ def leaderboard():
                 close_time=stage_handler.close_time,
                 is_closed=stage_handler.is_closed(),
                 left=left,
+                evaluator_name=evaluator_name,
             )
 
     except Exception as ex:
