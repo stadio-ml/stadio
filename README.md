@@ -104,7 +104,8 @@ OTHER configuration options:
 - `MAX_NUMBER_SUBMISSIONS`: limits the number of submissions per-participant.
 
 ### Submission evaluation
-The `eval_solution.csv` should contain the gold labels for the current competition and the label so specify if each sample should be used for the public or private leader-board.
+The `eval_solution.csv` should contain the gold labels for the current competition (column *Predicted*) and a setting to specify whether the sample should be used for the public leaderbord, the private one, or both (column *Public*). Set the latter to `1` to use the record for the public leaderboard, to `0` to use it for the private one, or `2` for both.
+
 The `eval_solution.csv` should have the following structure:
 ```csv
 Id,Predicted,Public
