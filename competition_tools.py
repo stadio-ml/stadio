@@ -277,11 +277,11 @@ def eval_public_private(submission, solution):
         # We should never fail here -- the file has already been validated!
         raise Exception("Unexpected error! Please contact an administrator")
 
-    public_mask = (df_true[PUBLIC] == 1) or (df_true[PUBLIC] == 2)
+    public_mask = (df_true[PUBLIC] == 1) | (df_true[PUBLIC] == 2)
     y_pred_public = df_pred[public_mask][TARGET].values
     y_true_public = df_true[public_mask][TARGET].values
 
-    private_mask = (df_true[PUBLIC] == 0) or (df_true[PUBLIC] == 2)
+    private_mask = (df_true[PUBLIC] == 0) | (df_true[PUBLIC] == 2)
     y_pred_private = df_pred[private_mask][TARGET].values
     y_true_private = df_true[private_mask][TARGET].values
 
