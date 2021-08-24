@@ -8,7 +8,6 @@ from enum import Enum
 from evaluation_functions import evaluator
 from sqlalchemy import inspect, func
 from config import CompetitionConfig
-
 import numpy as np
 
 from models import Submission, Evaluation
@@ -27,51 +26,102 @@ SOLUTION_HEADER = [INDEX, TARGET, PUBLIC]
 score_mapper = lambda score: f"{score :.3f}"
 
 
-def get_user_scores(db, user_id):
-    participants = db.session \
-        .query(Submission.user_id, Submission.timestamp, Evaluation.evaluation_public, Evaluation.evaluation_private) \
-        .join(Submission) \
-        .filter(Submission.user_id == user_id)\
-        .order_by(Evaluation.evaluation_public.desc()) \
+def get_user_scores(db, user_id, maximized_score=True):
+    participants = (
+        db.session.query(
+            Submission.user_id,
+            Submission.timestamp,
+            Evaluation.evaluation_public,
+            Evaluation.evaluation_private,
+        )
+        .join(Submission)
+        .filter(Submission.user_id == user_id)
+        .order_by(
+            Evaluation.evaluation_public.desc()
+            if maximized_score
+            else Evaluation.evaluation_public
+        )
         .all()
+    )
 
-    participants = [(user_id, time, score_mapper(pub_score), score_mapper(priv_score)) for user_id, time, pub_score, priv_score in participants]
+    participants = [
+        (user_id, time, score_mapper(pub_score), score_mapper(priv_score))
+        for user_id, time, pub_score, priv_score in participants
+    ]
     return participants
 
-def get_public_leaderboard(db):
-    participants = db.session \
-        .query(Submission.user_id, func.max(Evaluation.evaluation_public)) \
-        .join(Submission) \
-        .group_by(Submission.user_id) \
-        .order_by(Evaluation.evaluation_public.desc()) \
+
+def get_public_leaderboard(db, maximized_score=True):
+    participants = (
+        db.session.query(
+            Submission.user_id,
+            func.max(Evaluation.evaluation_public)
+            if maximized_score
+            else func.min(Evaluation.evaluation_public),
+        )
+        .join(Submission)
+        .group_by(Submission.user_id)
+        .order_by(
+            Evaluation.evaluation_public.desc()
+            if maximized_score
+            else Evaluation.evaluation_public
+        )
         .all()
+    )
 
     participants = [(user_id, score_mapper(score)) for user_id, score in participants]
     return participants
 
 
-def get_private_leaderboard(db, stage_handler):
-    participants = []
+def get_private_leaderboard(db, stage_handler, maximized_score=True):
+    participants = list()
 
     # Get the max private score corresponding to the people that have selected at least one solution
-    participants_select = db.session \
-        .query(Submission.user_id, func.max(Evaluation.evaluation_private)) \
-        .join(Submission) \
-        .filter(Submission.timestamp < stage_handler.close_time, Evaluation.private_check.is_(True)) \
-        .group_by(Submission.user_id) \
-        .order_by(Evaluation.evaluation_private.desc()) \
+    participants_select = (
+        db.session.query(
+            Submission.user_id,
+            func.max(Evaluation.evaluation_private)
+            if maximized_score
+            else func.min(Evaluation.evaluation_private),
+        )
+        .join(Submission)
+        .filter(
+            Submission.timestamp < stage_handler.close_time,
+            Evaluation.private_check.is_(True),
+        )
+        .group_by(Submission.user_id)
+        .order_by(
+            Evaluation.evaluation_private.desc()
+            if maximized_score
+            else Evaluation.evaluation_private
+        )
         .all()
+    )
 
     participants += participants_select
 
     # Get the people that did not select any solutions sorted by user_id, evaluation_public and timestamp
-    participants_not_select = db.session \
-        .query(Submission.user_id, Evaluation.evaluation_public, Evaluation.evaluation_private) \
-        .join(Submission) \
-        .filter(Submission.timestamp < stage_handler.close_time,
-                Submission.user_id.notin_([u_id for u_id, _ in participants_select])) \
-        .order_by(Submission.user_id.desc(), Evaluation.evaluation_public.desc(), Submission.timestamp.desc()) \
+    participants_not_select = (
+        db.session.query(
+            Submission.user_id,
+            Evaluation.evaluation_public,
+            Evaluation.evaluation_private,
+        )
+        .join(Submission)
+        .filter(
+            Submission.timestamp < stage_handler.close_time,
+            Submission.user_id.notin_([u_id for u_id, _ in participants_select]),
+        )
+        .order_by(
+            Submission.user_id.desc(),
+            Evaluation.evaluation_public.desc()
+            if maximized_score
+            else Evaluation.evaluation_public,
+            Submission.timestamp.desc(),
+        )
         .all()
+    )
+
     # Get the private score corresponding to the max public score for the people that did not select any solutions
     # Since data is sorted desc, the first entry for each user is the score to take
     u_placeholder = set()
@@ -86,13 +136,16 @@ def get_private_leaderboard(db, stage_handler):
 
     return participants
 
+
 def get_peruser_submissions_number(db):
-    peruser_submission_count = db.session \
-        .query(Submission.user_id, func.count(Submission.user_id)) \
-        .filter(Submission.user_id != CompetitionConfig.ADMIN_USER_ID) \
-        .group_by(Submission.user_id) \
-        .all()  # this result contains the baseline scores
+    peruser_submission_count = (
+        db.session.query(Submission.user_id, func.count(Submission.user_id))
+        .filter(Submission.user_id != CompetitionConfig.ADMIN_USER_ID)
+        .group_by(Submission.user_id)
+        .all()
+    )  # this result contains the baseline scores
     return peruser_submission_count
+
 
 def get_user_submissions_number(user_id, db):
     submission_count = (
@@ -103,11 +156,11 @@ def get_user_submissions_number(user_id, db):
     )
     return submission_count
 
+
 def get_submissions_number(db):
-    submission_count = db.session \
-        .query(func.count(Evaluation.submission_id)) \
-        .scalar()
+    submission_count = db.session.query(func.count(Evaluation.submission_id)).scalar()
     return submission_count
+
 
 def check_solution_file(solution_file):
     print(f"Checking solution file '{solution_file}'...")
@@ -126,11 +179,9 @@ def check_solution_file(solution_file):
                 f"Too many columns - Expecting columns {SOLUTION_HEADER} in the solution file."
             )
 
-        if (len(solution_df[PUBLIC].unique()) != 2) or (
-            not all([(v in [0, 1]) for v in solution_df[PUBLIC].unique()])
-        ):
+        if (~solution_df[PUBLIC].isin([0, 1, 2])).any():
             raise Exception(
-                f"Public column should contains only 0 and 1 where:\n - 1 means public\n - 0 means private"
+                f"Public column should contains only 0, 1 or 2 where:\n - 1 means public\n - 0 means private\n - 2 means both public and private"
             )
 
     except Exception as ex:
@@ -186,15 +237,16 @@ def eval_public_private(submission, solution):
             df_pred.index == df_true.index
         ).all()  # already checked, should be true!
     except Exception:
-        # We shuld never fail here -- the file has already been validated!
+        # We should never fail here -- the file has already been validated!
         raise Exception("Unexpected error! Please contact an administrator")
 
-    public_mask = df_true[PUBLIC] == 1
+    public_mask = (df_true[PUBLIC] == 1) | (df_true[PUBLIC] == 2)
     y_pred_public = df_pred[public_mask][TARGET].values
     y_true_public = df_true[public_mask][TARGET].values
 
-    y_pred_private = df_pred[~public_mask][TARGET].values
-    y_true_private = df_true[~public_mask][TARGET].values
+    private_mask = (df_true[PUBLIC] == 0) | (df_true[PUBLIC] == 2)
+    y_pred_private = df_pred[private_mask][TARGET].values
+    y_true_private = df_true[private_mask][TARGET].values
 
     public_score = evaluator(y_true_public, y_pred_public)
     private_score = evaluator(y_true_private, y_pred_private)
@@ -299,5 +351,3 @@ class StageHandler:
     def can_submit(self):
         stage = self._get_stage()
         return stage == Stage.OPEN or stage == Stage.CLOSED
-
-
