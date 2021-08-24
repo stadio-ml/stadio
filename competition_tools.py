@@ -27,32 +27,22 @@ score_mapper = lambda score: f"{score :.3f}"
 
 
 def get_user_scores(db, user_id, maximized_score=True):
-    if maximized_score:
-        participants = (
-            db.session.query(
-                Submission.user_id,
-                Submission.timestamp,
-                Evaluation.evaluation_public,
-                Evaluation.evaluation_private,
-            )
-            .join(Submission)
-            .filter(Submission.user_id == user_id)
-            .order_by(Evaluation.evaluation_public.desc())
-            .all()
+    participants = (
+        db.session.query(
+            Submission.user_id,
+            Submission.timestamp,
+            Evaluation.evaluation_public,
+            Evaluation.evaluation_private,
         )
-    else:
-        participants = (
-            db.session.query(
-                Submission.user_id,
-                Submission.timestamp,
-                Evaluation.evaluation_public,
-                Evaluation.evaluation_private,
-            )
-            .join(Submission)
-            .filter(Submission.user_id == user_id)
-            .order_by(Evaluation.evaluation_public)
-            .all()
+        .join(Submission)
+        .filter(Submission.user_id == user_id)
+        .order_by(
+            Evaluation.evaluation_public.desc()
+            if maximized_score
+            else Evaluation.evaluation_public
         )
+        .all()
+    )
 
     participants = [
         (user_id, time, score_mapper(pub_score), score_mapper(priv_score))
@@ -62,22 +52,22 @@ def get_user_scores(db, user_id, maximized_score=True):
 
 
 def get_public_leaderboard(db, maximized_score=True):
-    if maximized_score:
-        participants = (
-            db.session.query(Submission.user_id, func.max(Evaluation.evaluation_public))
-            .join(Submission)
-            .group_by(Submission.user_id)
-            .order_by(Evaluation.evaluation_public.desc())
-            .all()
+    participants = (
+        db.session.query(
+            Submission.user_id,
+            func.max(Evaluation.evaluation_public)
+            if maximized_score
+            else func.min(Evaluation.evaluation_public),
         )
-    else:
-        participants = (
-            db.session.query(Submission.user_id, func.min(Evaluation.evaluation_public))
-            .join(Submission)
-            .group_by(Submission.user_id)
-            .order_by(Evaluation.evaluation_public)
-            .all()
+        .join(Submission)
+        .group_by(Submission.user_id)
+        .order_by(
+            Evaluation.evaluation_public.desc()
+            if maximized_score
+            else Evaluation.evaluation_public
         )
+        .all()
+    )
 
     participants = [(user_id, score_mapper(score)) for user_id, score in participants]
     return participants
@@ -87,77 +77,50 @@ def get_private_leaderboard(db, stage_handler, maximized_score=True):
     participants = list()
 
     # Get the max private score corresponding to the people that have selected at least one solution
-    if maximized_score:
-        participants_select = (
-            db.session.query(
-                Submission.user_id, func.max(Evaluation.evaluation_private)
-            )
-            .join(Submission)
-            .filter(
-                Submission.timestamp < stage_handler.close_time,
-                Evaluation.private_check.is_(True),
-            )
-            .group_by(Submission.user_id)
-            .order_by(Evaluation.evaluation_private.desc())
-            .all()
+    participants_select = (
+        db.session.query(
+            Submission.user_id,
+            func.max(Evaluation.evaluation_private)
+            if maximized_score
+            else func.min(Evaluation.evaluation_private),
         )
-
-    else:
-        participants_select = (
-            db.session.query(
-                Submission.user_id, func.min(Evaluation.evaluation_private)
-            )
-            .join(Submission)
-            .filter(
-                Submission.timestamp < stage_handler.close_time,
-                Evaluation.private_check.is_(True),
-            )
-            .group_by(Submission.user_id)
-            .order_by(Evaluation.evaluation_private)
-            .all()
+        .join(Submission)
+        .filter(
+            Submission.timestamp < stage_handler.close_time,
+            Evaluation.private_check.is_(True),
         )
+        .group_by(Submission.user_id)
+        .order_by(
+            Evaluation.evaluation_private.desc()
+            if maximized_score
+            else Evaluation.evaluation_private
+        )
+        .all()
+    )
 
     participants += participants_select
 
     # Get the people that did not select any solutions sorted by user_id, evaluation_public and timestamp
-    if maximized_score:
-        participants_not_select = (
-            db.session.query(
-                Submission.user_id,
-                Evaluation.evaluation_public,
-                Evaluation.evaluation_private,
-            )
-            .join(Submission)
-            .filter(
-                Submission.timestamp < stage_handler.close_time,
-                Submission.user_id.notin_([u_id for u_id, _ in participants_select]),
-            )
-            .order_by(
-                Submission.user_id.desc(),
-                Evaluation.evaluation_public.desc(),
-                Submission.timestamp.desc(),
-            )
-            .all()
+    participants_not_select = (
+        db.session.query(
+            Submission.user_id,
+            Evaluation.evaluation_public,
+            Evaluation.evaluation_private,
         )
-    else:
-        participants_not_select = (
-            db.session.query(
-                Submission.user_id,
-                Evaluation.evaluation_public,
-                Evaluation.evaluation_private,
-            )
-            .join(Submission)
-            .filter(
-                Submission.timestamp < stage_handler.close_time,
-                Submission.user_id.notin_([u_id for u_id, _ in participants_select]),
-            )
-            .order_by(
-                Submission.user_id.desc(),
-                Evaluation.evaluation_public,
-                Submission.timestamp.desc(),
-            )
-            .all()
+        .join(Submission)
+        .filter(
+            Submission.timestamp < stage_handler.close_time,
+            Submission.user_id.notin_([u_id for u_id, _ in participants_select]),
         )
+        .order_by(
+            Submission.user_id.desc(),
+            Evaluation.evaluation_public.desc()
+            if maximized_score
+            else Evaluation.evaluation_public,
+            Submission.timestamp.desc(),
+        )
+        .all()
+    )
 
     # Get the private score corresponding to the max public score for the people that did not select any solutions
     # Since data is sorted desc, the first entry for each user is the score to take
