@@ -216,11 +216,9 @@ def check_solution_file(solution_file):
                 f"Too many columns - Expecting columns {SOLUTION_HEADER} in the solution file."
             )
 
-        if (len(solution_df[PUBLIC].unique()) != 2) or (
-            not all([(v in [0, 1]) for v in solution_df[PUBLIC].unique()])
-        ):
+        if (~solution_df[PUBLIC].isin([0, 1, 2])).any():
             raise Exception(
-                f"Public column should contains only 0 and 1 where:\n - 1 means public\n - 0 means private"
+                f"Public column should contains only 0, 1 or 2 where:\n - 1 means public\n - 0 means private\n - 2 means both public and private"
             )
 
     except Exception as ex:
