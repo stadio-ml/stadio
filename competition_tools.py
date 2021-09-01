@@ -131,7 +131,7 @@ def get_private_leaderboard(db, stage_handler, maximized_score=True):
         u_placeholder.add(pns[0])
 
     # Sort the scores
-    participants = sorted(participants, key=lambda x: x[1], reverse=True)
+    participants = sorted(participants, key=lambda x: x[1], reverse=maximized_score)
     participants = [(user_id, score_mapper(score)) for user_id, score in participants]
 
     return participants
