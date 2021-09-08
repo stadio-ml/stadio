@@ -1,4 +1,6 @@
-# DSL Competitions submission tool
+![](banner.png)
+
+# Stadio
 
 ### Check list before running a competition
 1. Create competition_folder, with:
